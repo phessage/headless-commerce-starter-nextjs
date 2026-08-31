@@ -1,0 +1,32 @@
+.checkout {
+  margin: 0 6vw 4rem;
+  padding: 1.5rem;
+  background: #fff;
+  border-radius: 8px;
+}
+.checkout form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+.checkout input,
+.checkout select {
+  width: 100%;
+  padding: 0.7rem;
+}
+.checkout button {
+  padding: 0.8rem;
+  background: var(--pine);
+  color: #fff;
+  border: 0;
+  border-radius: 4px;
+}
+.options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.options p {
+  grid-column: 1/-1;
+}
