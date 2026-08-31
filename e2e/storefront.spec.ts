@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 test('loads catalog through the real route and updates cart UI',async({page})=>{
   const catalog=page.waitForResponse(r=>r.url().includes('/api/products')&&r.status()===200);
-  await page.goto('/'); const response=await catalog; expect((await response.json()).data).toHaveLength(3);
+  await page.goto('/'); const response=await catalog; expect(response.headers()['x-sandbox-mode']).toBe('synthetic'); expect((await response.json()).data).toHaveLength(3);
   await expect(page.getByRole('heading',{name:'Trail Pack 24L'})).toBeVisible();
   await page.getByRole('button',{name:'Add Trail Pack 24L to cart'}).click();
   await expect(page.getByText('Cart (1)')).toBeVisible();
