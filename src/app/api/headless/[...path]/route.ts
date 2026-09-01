@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headlessRuntime } from "../../../../lib/headless-runtime";
 
-const allowed =
-  /^v1\/headless\/carts(?:\/current(?:\/items(?:\/[0-9a-f-]+)?|\/checkout(?:\/(?:shipping-method|payment-method|order))?)?)?$/;
+const allowed = /^(?:v1\/headless\/carts(?:\/current(?:\/items(?:\/[0-9a-f-]+)?|\/checkout(?:\/(?:shipping-method|payment-method|order))?)?)?|v1\/headless\/orders\/lookup)$/;
 
 async function proxy(
   request: NextRequest,

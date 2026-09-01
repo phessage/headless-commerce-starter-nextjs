@@ -15,7 +15,7 @@ test("places and renders a real non-hosted order through the server proxy", asyn
   await add.click();
   await added;
   await expect(page.getByText("Cart (1)")).toBeVisible();
-  await page.getByLabel("Email").fill("next-live@example.test");
+  await page.getByLabel("Email", { exact: true }).fill("next-live@example.test");
   await page.getByLabel("First name").fill("Headless");
   await page.getByLabel("Last name").fill("Fixture");
   await page.getByLabel("Address").fill("1 Test Way");
@@ -62,4 +62,11 @@ test("places and renders a real non-hosted order through the server proxy", asyn
   await expect(
     page.getByRole("heading", { name: new RegExp(`Order ${body.data.orderNumber} placed`) }),
   ).toBeVisible();
+  await page.reload();
+  await page.getByLabel("Order number").fill(body.data.orderNumber);
+  await page.getByLabel("Order email").fill("next-live@example.test");
+  const reopened = page.waitForResponse((r) => r.url().endsWith("/v1/headless/orders/lookup") && r.request().method() === "POST");
+  await page.getByRole("button", { name: "Check order status" }).click();
+  const lookup = await reopened; expect(lookup.status()).toBe(201);
+  await expect(page.getByRole("heading", { name: `Order ${body.data.orderNumber}` })).toBeVisible();
 });
