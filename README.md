@@ -1,18 +1,21 @@
-# 1Ecomm Headless Commerce Next.js Starter
+# 1Ecomm Next.js Storefront Starter
 
-Production-oriented App Router storefront with a deterministic, sanitized demo API and real Playwright browser tests.
+This is a ready-to-run Next.js App Router shop. The server talks to 1Ecomm through a small fixed proxy, while the browser renders products, cart, checkout choices and a pending non-hosted order confirmation. It never charges a card or wallet.
 
-## Run
+## Run it
+
+1. Install Node.js 20 or newer.
+2. Open `headless.config.json` and replace only `storeId` with your provisioned 1Ecomm store ID. The included ID is a safe test fixture.
+3. Run:
 
 ```bash
-npm install
+npm ci
+npm run check
 npm run dev
-# another terminal
-npm run test:e2e
 ```
 
-Change `storeId` in `headless.config.json` to run the catalog, anonymous-cart, checkout-preparation, and non-hosted pending-order app for another configured store. The server resolves the public runtime document; the browser receives neither the publishable key nor an unrestricted upstream proxy. Order placement is offered only for a server-approved non-hosted method and retains one idempotency key across an uncertain retry.
+4. Open `http://localhost:3000`. You should see products from the selected store. No source edit, API URL, or key copy is required.
 
-Run `npm run test:e2e:live` for a real browser journey covering catalog, cart creation, add-to-cart, checkout preparation, server-provided shipping/payment selection, and pending-order confirmation. Never clone production customer data into a demo environment.
+`npm run check` makes a production build and launches the app for deterministic browser tests. `npm run test:e2e:live` creates an isolated fixture cart and pending bank-transfer test order against the deployed service. It does not move money.
 
-See [architecture](docs/architecture.md), [sandbox policy](docs/sandbox.md), and [production checklist](docs/production-readiness.md).
+The server route accepts only the starter's fixed commerce operations; it is not an unrestricted proxy. See [architecture](docs/architecture.md), [sandbox policy](docs/sandbox.md), and [production checklist](docs/production-readiness.md).

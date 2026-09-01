@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-test("prepares a real fixture cart through the server proxy", async ({
+test("places and renders a real non-hosted order through the server proxy", async ({
   page,
 }) => {
   await page.goto("/");
@@ -50,14 +50,15 @@ test("prepares a real fixture cart through the server proxy", async ({
   const placed = page.waitForResponse(
     (r) =>
       r.url().endsWith("/checkout/order") &&
-      r.request().method() === "POST" &&
-      r.status() === 201,
+      r.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Place pending order" }).click();
   const response = await placed;
   const body = await response.json();
+  expect(response.status(), JSON.stringify(body)).toBe(201);
   expect(body.data.requiresPayment).toBe(false);
   expect(body.data.paymentStatus).toBe("pending");
+  console.log(`Next.js live order: ${body.data.orderNumber}`);
   await expect(
     page.getByRole("heading", { name: new RegExp(`Order ${body.data.orderNumber} placed`) }),
   ).toBeVisible();
