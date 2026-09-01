@@ -7,12 +7,15 @@ type Product = {
   price: { amount: string; currency: string };
   available: boolean;
 };
-type Option = { id: string; name: string };
+type Option = { id: string; name: string; capabilities?: { requiresHostedCheckout?: boolean; canPlaceOrder?: boolean } };
 type Preparation = {
   shippingOptions: Option[];
   paymentMethods: Option[];
+  selectedPaymentMethodId: string | null;
+  ready: boolean;
   missing: string[];
 };
+type Order = { orderId: string; orderNumber: string; status: string; paymentStatus: string };
 const cartHeaders = (token?: string, json = false) => ({
   ...(token ? { "x-cart-token": token } : {}),
   ...(json ? { "content-type": "application/json" } : {}),
@@ -24,6 +27,8 @@ export function Storefront() {
     [cartId, setCartId] = useState(""),
     [cartToken, setCartToken] = useState(""),
     [preparation, setPreparation] = useState<Preparation>(),
+    [order, setOrder] = useState<Order>(),
+    [orderIntent, setOrderIntent] = useState(""),
     [error, setError] = useState(""),
     [status, setStatus] = useState(""),
     [synthetic, setSynthetic] = useState(false);
@@ -120,6 +125,36 @@ export function Storefront() {
     if (!r.ok) throw new Error(`${kind} selection failed`);
     setPreparation((await r.json()).data);
     setStatus(`${kind} selected`);
+  }
+  async function placeOrder() {
+    if (!preparation?.ready) throw new Error("Checkout is not ready");
+    const selected = preparation.paymentMethods.find(
+      (method) => method.id === preparation.selectedPaymentMethodId,
+    );
+    if (
+      selected?.capabilities?.requiresHostedCheckout !== false ||
+      selected.capabilities.canPlaceOrder !== true
+    ) {
+      throw new Error("Choose a supported non-hosted payment method");
+    }
+    const intent = orderIntent || crypto.randomUUID();
+    setOrderIntent(intent);
+    const response = await fetch(
+      "/api/headless/v1/headless/carts/current/checkout/order",
+      {
+        method: "POST",
+        headers: {
+          ...cartHeaders(cartToken),
+          "Idempotency-Key": intent,
+        },
+      },
+    );
+    if (!response.ok) {
+      const problem = await response.json().catch(() => null) as { detail?: string; title?: string } | null;
+      throw new Error(problem?.detail ?? problem?.title ?? `Order placement failed (${response.status})`);
+    }
+    setOrder((await response.json()).data);
+    setStatus("Order placed without hosted payment");
   }
   return (
     <>
@@ -284,6 +319,23 @@ export function Storefront() {
                     ? `Preparation gaps: ${preparation.missing.join(", ")}`
                     : "No preparation gaps"}
                 </p>
+                {!order && (
+                  <button
+                    disabled={!preparation.ready}
+                    onClick={() =>
+                      placeOrder().catch((x) => setError(x.message))
+                    }
+                  >
+                    Place pending order
+                  </button>
+                )}
+                {order && (
+                  <section aria-label="Order confirmation">
+                    <h3>Order {order.orderNumber} placed</h3>
+                    <p>Status: {order.status}</p>
+                    <p>Payment: {order.paymentStatus}</p>
+                  </section>
+                )}
               </div>
             )}
           </section>
