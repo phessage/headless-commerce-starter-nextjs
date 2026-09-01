@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headlessRuntime } from "../../../../lib/headless-runtime";
 
 const allowed =
-  /^v1\/headless\/carts(?:\/current(?:\/items(?:\/[0-9a-f-]+)?|\/checkout(?:\/(?:shipping-method|payment-method))?)?)?$/;
+  /^v1\/headless\/carts(?:\/current(?:\/items(?:\/[0-9a-f-]+)?|\/checkout(?:\/(?:shipping-method|payment-method|order))?)?)?$/;
 
 async function proxy(
   request: NextRequest,
@@ -26,6 +26,8 @@ async function proxy(
   };
   const cartToken = request.headers.get("x-cart-token");
   if (cartToken) headers["x-cart-token"] = cartToken;
+  const idempotencyKey = request.headers.get("idempotency-key");
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   if (request.headers.get("content-type"))
     headers["content-type"] = "application/json";
   const response = await fetch(upstream, {
