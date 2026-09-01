@@ -16,6 +16,7 @@ type Preparation = {
   missing: string[];
 };
 type Order = { orderId: string; orderNumber: string; status: string; paymentStatus: string };
+type OrderStatus = { orderNumber: string; status: string; paymentStatus: string; tracking: Record<string, unknown> | null };
 const cartHeaders = (token?: string, json = false) => ({
   ...(token ? { "x-cart-token": token } : {}),
   ...(json ? { "content-type": "application/json" } : {}),
@@ -28,6 +29,7 @@ export function Storefront() {
     [cartToken, setCartToken] = useState(""),
     [preparation, setPreparation] = useState<Preparation>(),
     [order, setOrder] = useState<Order>(),
+    [orderStatus, setOrderStatus] = useState<OrderStatus>(),
     [orderIntent, setOrderIntent] = useState(""),
     [error, setError] = useState(""),
     [status, setStatus] = useState(""),
@@ -155,6 +157,13 @@ export function Storefront() {
     }
     setOrder((await response.json()).data);
     setStatus("Order placed without hosted payment");
+  }
+  async function lookupOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError(""); setOrderStatus(undefined);
+    const data = new FormData(event.currentTarget);
+    const response = await fetch("/api/headless/v1/headless/orders/lookup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderNumber: data.get("orderNumber"), email: data.get("orderEmail") }) });
+    if (!response.ok) throw new Error("We could not find an order with those details");
+    setOrderStatus((await response.json()).data);
   }
   return (
     <>
@@ -340,6 +349,15 @@ export function Storefront() {
             )}
           </section>
         )}
+        <section className="checkout" aria-label="Find an order">
+          <h2>Find your order</h2><p>Use the order number and email entered at checkout.</p>
+          <form onSubmit={(event) => lookupOrder(event).catch((x) => setError(x.message))}>
+            <label>Order number<input name="orderNumber" required /></label>
+            <label>Order email<input name="orderEmail" type="email" required /></label>
+            <button>Check order status</button>
+          </form>
+          {orderStatus && <section aria-label="Order status"><h3>Order {orderStatus.orderNumber}</h3><p>Status: {orderStatus.status}</p><p>Payment: {orderStatus.paymentStatus}</p><p>{orderStatus.tracking ? "Tracking is available" : "Tracking is not available yet"}</p></section>}
+        </section>
       </main>
     </>
   );

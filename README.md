@@ -1,6 +1,6 @@
 # 1Ecomm Next.js Storefront Starter
 
-This is a ready-to-run Next.js App Router shop. The server talks to 1Ecomm through a small fixed proxy, while the browser renders products, cart, checkout choices and a pending non-hosted order confirmation. It never charges a card or wallet.
+This is a ready-to-run Next.js App Router shop. The server talks to 1Ecomm through a small fixed proxy, while the browser renders products, cart, checkout choices, a pending non-hosted order confirmation, and guest order status after a later visit. It never charges a card or wallet.
 
 ## Run it
 
