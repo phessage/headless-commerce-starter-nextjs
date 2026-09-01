@@ -11,8 +11,8 @@ npm run dev
 npm run test:e2e
 ```
 
-The demo route contains invented products only. It never reads or copies production data. Set `HEADLESS_API_URL` and `HEADLESS_PUBLISHABLE_KEY` to use the server-side live proxy. The browser receives neither the key nor an unrestricted upstream proxy; only the documented cart routes are forwarded.
+Change `storeId` in `headless.config.json` to run the catalog, anonymous-cart and checkout-preparation app for another configured store. The server resolves the public runtime document; the browser receives neither the publishable key nor an unrestricted upstream proxy.
 
-With a dedicated test tenant configured, run `npm run test:e2e:live` for a real browser journey covering catalog, cart creation, add-to-cart, checkout preparation, and server-provided shipping/payment selection. The command fails closed when either environment variable is absent. Never clone production customer data into a demo environment.
+Run `npm run test:e2e:live` for a real browser journey covering catalog, cart creation, add-to-cart, checkout preparation, and server-provided shipping/payment selection. Never clone production customer data into a demo environment.
 
 See [architecture](docs/architecture.md), [sandbox policy](docs/sandbox.md), and [production checklist](docs/production-readiness.md).
