@@ -32,13 +32,11 @@ export function Storefront() {
     [orderStatus, setOrderStatus] = useState<OrderStatus>(),
     [orderIntent, setOrderIntent] = useState(""),
     [error, setError] = useState(""),
-    [status, setStatus] = useState(""),
-    [synthetic, setSynthetic] = useState(false);
+    [status, setStatus] = useState("");
   useEffect(() => {
     fetch("/api/products")
       .then(async (r) => {
         if (!r.ok) throw new Error("Catalog unavailable");
-        setSynthetic(r.headers.get("x-sandbox-mode") === "synthetic");
         return r.json();
       })
       .then((v) => setProducts(v.data))
@@ -53,11 +51,6 @@ export function Storefront() {
   );
   async function add(product: Product) {
     setError("");
-    if (synthetic) {
-      setCartCount((v) => v + 1);
-      setStatus("Synthetic demo only; configure a live sandbox for checkout");
-      return;
-    }
     let id = cartId,
       token = cartToken;
     if (!id) {
