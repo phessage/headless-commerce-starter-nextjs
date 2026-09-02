@@ -2,9 +2,11 @@ import { expect, test } from "@playwright/test";
 test("places and renders a real non-hosted order through the server proxy", async ({
   page,
 }) => {
+  const productId = process.env.HEADLESS_PRODUCT_ID;
+  if (!productId || !process.env.HEADLESS_PUBLISHABLE_KEY) throw new Error("Allocated fixture environment is required");
   await page.goto("/");
   const add = page.locator(
-    'button[data-product-id="1f7884bd-759d-4f47-9fdb-c7ea3dd3a9ef"]',
+    `button[data-product-id="${productId}"]`,
   );
   await expect(add).toBeVisible();
   const added = page.waitForResponse(
