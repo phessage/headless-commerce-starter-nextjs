@@ -27,6 +27,10 @@ The API owns tenant scope, pricing, inventory, shipping/payment eligibility and 
 - Use semantic, accessible HTML and explicit loading/error/uncertain-result states.
 - `next build` does not lint in Next.js 16; do not assume it did. Read installed docs before using APIs recalled from training.
 
+## License boundary
+
+`LICENSE.md` allows authorized 1Ecomm customer projects and deployed or compiled shopper applications, but prohibits redistribution of this reusable starter or its derivatives. Preserve the notice in clones, packages, generated projects and documentation. Do not describe this repository as open source or grant broader rights in examples.
+
 ## Verification
 
 Run `rm -rf node_modules .next && npm ci`, `npm run check`, and the deployed sandbox journey when authorized. Assert upstream method/path/headers and rendered results. Dependency upgrades require stable releases, lockfile, build and Playwright proof. Never clone production data.

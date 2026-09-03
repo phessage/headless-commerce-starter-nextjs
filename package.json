@@ -1,6 +1,7 @@
 {
   "name": "@phessage/headless-commerce-starter-nextjs",
   "version": "0.1.0",
+  "license": "SEE LICENSE IN LICENSE.md",
   "private": true,
   "scripts": {
     "dev": "next dev",
