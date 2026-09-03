@@ -4,6 +4,9 @@ export type HeadlessRuntime = { storeId: string; apiUrl: string; publishableKey:
 let cached: Promise<HeadlessRuntime> | undefined;
 export function headlessRuntime(): Promise<HeadlessRuntime> {
   if (cached) return cached;
+  if (process.env.HEADLESS_PUBLISHABLE_KEY) {
+    return Promise.resolve({ storeId: process.env.HEADLESS_STORE_ID ?? '', apiUrl: process.env.HEADLESS_API_URL ?? 'https://api.1ecomm.com', publishableKey: process.env.HEADLESS_PUBLISHABLE_KEY });
+  }
   const pending = (async () => {
     const storeId = process.env.HEADLESS_STORE_ID ?? config.storeId;
     const bootstrapUrl = (process.env.HEADLESS_BOOTSTRAP_URL ?? config.bootstrapUrl).replace(/\/$/, "");

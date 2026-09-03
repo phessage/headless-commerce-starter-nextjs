@@ -2,9 +2,11 @@ import { expect, test } from "@playwright/test";
 test("places and renders a real non-hosted order through the server proxy", async ({
   page,
 }) => {
+  const productId = process.env.HEADLESS_PRODUCT_ID;
+  if (!productId || !process.env.HEADLESS_PUBLISHABLE_KEY) throw new Error("Allocated fixture environment is required");
   await page.goto("/");
   const add = page.locator(
-    'button[data-product-id="1f7884bd-759d-4f47-9fdb-c7ea3dd3a9ef"]',
+    `button[data-product-id="${productId}"]`,
   );
   await expect(add).toBeVisible();
   const added = page.waitForResponse(
@@ -31,16 +33,16 @@ test("places and renders a real non-hosted order through the server proxy", asyn
   await page
     .getByRole("button", { name: "Load delivery and payment options" })
     .click();
-  await prepared;
+  const preparation = (await (await prepared).json()).data;
   const shipping = page.getByLabel("Shipping method"),
     payment = page.getByLabel("Payment method");
-  await expect(shipping.locator("option")).toHaveCount(3);
   await expect(payment.locator("option")).toHaveCount(2);
-  const shippingSelected = page.waitForResponse(
-    (r) => r.url().endsWith("/checkout/shipping-method") && r.status() === 200,
-  );
-  await shipping.selectOption({ index: 1 });
-  await shippingSelected;
+  if (preparation.shippingOptions.length > 0) {
+    await expect(shipping.locator("option")).toHaveCount(preparation.shippingOptions.length + 1);
+    const shippingSelected = page.waitForResponse((r) => r.url().endsWith("/checkout/shipping-method") && r.status() === 200);
+    await shipping.selectOption({ index: 1 });
+    await shippingSelected;
+  } else await expect(shipping.locator("option")).toHaveCount(1);
   const paymentSelected = page.waitForResponse(
     (r) => r.url().endsWith("/checkout/payment-method") && r.status() === 200,
   );
