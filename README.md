@@ -1,5 +1,7 @@
 # 1Ecomm Next.js Storefront Starter
 
+Free for authorized 1Ecomm customers and their developers to build and operate 1Ecomm-connected storefronts. You may deploy the finished store, but may not redistribute, resell, sublicense, mirror, or republish this starter or a reusable derivative. See [LICENSE.md](LICENSE.md).
+
 This is a ready-to-run Next.js App Router shop. The server talks to 1Ecomm through a small fixed proxy, while the browser renders products, cart, checkout choices, a pending non-hosted order confirmation, and guest order status after a later visit. It never charges a card or wallet.
 
 ## Run it
