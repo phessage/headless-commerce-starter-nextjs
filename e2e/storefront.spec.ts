@@ -25,7 +25,7 @@ test('requires an explicit variant and sends its ID through the real proxy', asy
   await expect(choice).toBeVisible();
   await expect(page.getByText('Cart (0)')).toBeVisible();
   expect(adds).toEqual([]);
-  await expect(choice.locator('option', { hasText: 'Green' })).toBeDisabled();
+  await expect(choice.locator('option', { hasText: 'Green' })).toHaveJSProperty('disabled', true);
   await choice.selectOption({ label: 'Red' });
   await expect(page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Camp Mug' }) }).getByText('$28.00')).toBeVisible();
   const changed = page.waitForResponse((r) => r.url().endsWith('/carts/current/items') && r.request().method() === 'POST');
@@ -40,6 +40,6 @@ test('does not create a cart or choose a default when variant lookup fails', asy
   await page.route('**/products/*/variants', (route) => route.fulfill({ status: 503, body: '{}' }));
   await page.goto('/');
   await page.getByRole('button', { name: 'Add Trail Pack 24L to cart' }).click();
-  await expect(page.getByRole('alert')).toContainText('Product options unavailable');
+  await expect(page.getByRole('alert').filter({ hasText: 'Product options unavailable' })).toBeVisible();
   expect(creates).toEqual([]);
 });
