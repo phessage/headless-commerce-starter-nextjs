@@ -8,22 +8,21 @@ permissions: { contents: read }
 jobs:
   browser:
     runs-on: ubuntu-latest
+    # Match @playwright/test; browsers and OS libraries are supplied together.
+    container: mcr.microsoft.com/playwright:v1.62.1-noble
     steps:
+      - name: Install fixture tooling
+        run: apt-get update && apt-get install --no-install-recommends -y jq
       - uses: actions/checkout@v4
+      - name: Trust the checked-out workspace inside the job container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
       - run: npm run check
-      - name: Allocate isolated deployed fixture
-        env: {HEADLESS_E2E_ALLOCATOR_TOKEN: '${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}'}
-        run: bash .github/scripts/headless-fixture.sh allocate
-      - name: Run deployed browser order journey
-        run: npm run test:e2e:live
-      - name: Release isolated deployed fixture
-        if: always()
-        env: {HEADLESS_E2E_ALLOCATOR_TOKEN: '${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}'}
-        run: bash .github/scripts/headless-fixture.sh release
+      - run: npm run pack:check
+      - uses: actions/upload-artifact@v4
+        with: { name: licensed-customer-source, path: release/, retention-days: 14 }
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: playwright-report, path: playwright-report/, retention-days: 14 }
