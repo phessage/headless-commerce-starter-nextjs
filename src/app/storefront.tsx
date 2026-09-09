@@ -7,6 +7,7 @@ type Product = {
   price: { amount: string; currency: string };
   available: boolean;
 };
+type Variant = { id: string; title: string; price: Product["price"]; selectedOptions: Record<string, string>; available: boolean };
 type Option = { id: string; name: string; capabilities?: { requiresHostedCheckout?: boolean; canPlaceOrder?: boolean } };
 type Preparation = {
   shippingOptions: Option[];
@@ -22,6 +23,10 @@ const cartHeaders = (token?: string, json = false) => ({
   ...(json ? { "content-type": "application/json" } : {}),
 });
 export function Storefront() {
+  const addBusy = useRef(false);
+  const [adding, setAdding] = useState(false);
+  const [variants, setVariants] = useState<Record<string, Variant[]>>({});
+  const [choices, setChoices] = useState<Record<string, string>>({});
   const paymentBusy = useRef(false);
   const [paying, setPaying] = useState(false);
 
@@ -63,7 +68,29 @@ export function Storefront() {
     [products, query],
   );
   async function add(product: Product) {
+    if (addBusy.current) return;
+    addBusy.current = true;
+    setAdding(true);
     setError("");
+    try {
+    let options = variants[product.id];
+    if (!options) {
+      const response = await fetch(`/api/headless/v1/headless/products/${encodeURIComponent(product.id)}/variants`);
+      if (!response.ok) throw new Error("Product options unavailable. Please try again later.");
+      const body = await response.json();
+      if (!Array.isArray(body.data) || body.data.some((v: Variant) =>
+        !v || typeof v.id !== 'string' || typeof v.title !== 'string' || typeof v.available !== 'boolean' ||
+        !v.price || typeof v.price.amount !== 'string' || !Number.isFinite(Number(v.price.amount)) || typeof v.price.currency !== 'string'
+      )) throw new Error("Product options unavailable");
+      options = body.data;
+      setVariants((previous) => ({ ...previous, [product.id]: options }));
+    }
+    const variant = options.find((v) => v.id === choices[product.id]) ?? (options.length === 1 ? options[0] : undefined);
+    if (!variant && options.length > 1) {
+      setStatus(`Choose an option for ${product.name}, then add it to your cart.`);
+      return;
+    }
+    if (!variant?.available) throw new Error("This product option is unavailable");
     let id = cartId,
       token = cartToken;
     if (!id) {
@@ -80,11 +107,14 @@ export function Storefront() {
     const r = await fetch("/api/headless/v1/headless/carts/current/items", {
       method: "POST",
       headers: cartHeaders(token, true),
-      body: JSON.stringify({ productId: product.id, quantity: 1 }),
+      body: JSON.stringify({ productId: product.id, variantId: variant.id, quantity: 1 }),
     });
     if (!r.ok) throw new Error("Add to cart failed");
-    setCartCount((v) => v + 1);
+    const updated = (await r.json()).data;
+    setCartCount(updated.items.reduce((n: number, item: { quantity: number }) => n + item.quantity, 0));
+    setPreparation(undefined);
     setStatus(`${product.name} added`);
+    } finally { addBusy.current = false; setAdding(false); }
   }
   async function prepare(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -227,12 +257,22 @@ export function Storefront() {
               <strong>
                 {new Intl.NumberFormat("en-US", {
                   style: "currency",
-                  currency: p.price.currency,
-                }).format(Number(p.price.amount))}
+                  currency: (variants[p.id]?.find((v) => v.id === choices[p.id])?.price ?? p.price).currency,
+                }).format(Number((variants[p.id]?.find((v) => v.id === choices[p.id])?.price ?? p.price).amount))}
               </strong>
+              {(variants[p.id]?.length ?? 0) > 1 && <label>
+                Variant for {p.name}
+                <select aria-label={`Variant for ${p.name}`} value={choices[p.id] ?? ''}
+                  onChange={(event) => setChoices((previous) => ({ ...previous, [p.id]: event.target.value }))}>
+                  <option value="" disabled>Choose an option</option>
+                  {variants[p.id].map((variant) => <option key={variant.id} value={variant.id} disabled={!variant.available}>
+                    {variant.title}{variant.available ? '' : ' (unavailable)'}
+                  </option>)}
+                </select>
+              </label>}
                 <button
                   data-product-id={p.id}
-                  disabled={!p.available}
+                  disabled={!p.available || adding || paying}
                 onClick={() => add(p).catch((e) => setError(e.message))}
               >
                 Add {p.name} to cart

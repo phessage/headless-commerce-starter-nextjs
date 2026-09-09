@@ -11,6 +11,9 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run check
+      - run: npm run pack:check
+      - uses: actions/upload-artifact@v4
+        with: { name: licensed-customer-source, path: release/, retention-days: 14 }
       - name: Allocate isolated deployed fixture
         env: {HEADLESS_E2E_ALLOCATOR_TOKEN: '${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}'}
         run: bash .github/scripts/headless-fixture.sh allocate
