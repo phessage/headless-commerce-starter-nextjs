@@ -39,3 +39,22 @@ test('fixed proxy rejects unsupported method, foreign origin, extra queries and 
   expect((await request.post('/api/headless/v1/headless/carts', { data: 'x'.repeat(70_000) })).status()).toBe(400);
   expect((await request.post('/api/headless/v1/headless/admin/orders')).status()).toBe(404);
 });
+
+ test('nonshipping checkout can submit without a state, postcode or shipping method', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Add Digital Guide to cart' }).click();
+  await expect(page.getByText('Cart (1)')).toBeVisible();
+  for (const [label, value] of Object.entries({ Email: 'buyer@example.com', 'First name': 'Ada', 'Last name': 'Buyer', Address: '1 Main', City: 'Hong Kong', 'Country code': 'HK' })) {
+    await page.getByLabel(label, { exact: true }).fill(value);
+  }
+  const preparation = page.waitForResponse(r => r.url().endsWith('/checkout') && r.request().method() === 'PATCH' && r.status() === 200);
+  await page.getByRole('button', { name: 'Load delivery and payment options' }).click();
+  await preparation;
+  await expect(page.getByLabel('Shipping method')).toHaveCount(0);
+  const payment = page.waitForResponse(r => r.url().endsWith('/checkout/payment-method') && r.status() === 200);
+  await page.getByLabel('Payment method').selectOption('bank');
+  await payment;
+  const placed = page.waitForResponse(r => r.url().endsWith('/checkout/order') && r.status() === 201);
+  await page.getByTestId('checkout-submit').click();
+  await placed;
+ });

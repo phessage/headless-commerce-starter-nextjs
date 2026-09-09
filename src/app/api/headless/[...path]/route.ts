@@ -3,6 +3,7 @@ import { headlessRuntime } from '../../../../lib/headless-runtime';
 import { boundedText, commerceFetch, MAX_REQUEST_BYTES } from '../../../../lib/headless-transport';
 
 const routes: Array<[RegExp, readonly string[]]> = [
+  [/^v1\/headless\/products\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/variants$/i, ['GET']],
   [/^v1\/headless\/carts$/, ['POST']],
   [/^v1\/headless\/carts\/current$/, ['GET']],
   [/^v1\/headless\/carts\/current\/items$/, ['POST']],

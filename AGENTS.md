@@ -54,3 +54,5 @@ The API owns tenant scope, pricing, inventory, shipping/payment eligibility and 
 ## Verification
 
 Run `rm -rf node_modules .next && npm ci`, `npm run check`, and the deployed sandbox journey when authorized. Assert upstream method/path/headers and rendered results. Dependency upgrades require stable releases, lockfile, build and Playwright proof. Never clone production data.
+
+Active documentation may exist only on the ecommerce-docs integration ref. Read it with git show origin/integration/saas-launch-20260909:ssot/saas-launch-master-checklist.md (and the tests SSOT) in that repository; do not switch its checkout or treat the primary main copy as the new program state.

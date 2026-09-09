@@ -2,10 +2,16 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 const storeId = '01f5b02f-d7c0-42cd-b880-59f78ea70aa3';
 const products = [
-  { id: 'p1', name: 'Trail Pack 24L', description: 'Pack', price: { amount: '89', currency: 'USD' }, available: true },
-  { id: 'p2', name: 'Camp Mug', description: 'Mug', price: { amount: '24', currency: 'USD' }, available: true },
-  { id: 'p3', name: 'Alpine Shell', description: 'Shell', price: { amount: '219', currency: 'USD' }, available: false },
+  { id: '00000000-0000-4000-8000-000000000004', name: 'Digital Guide', description: 'Guide', price: { amount: '10', currency: 'USD' }, available: true },
+  { id: '00000000-0000-4000-8000-000000000001', name: 'Trail Pack 24L', description: 'Pack', price: { amount: '89', currency: 'USD' }, available: true },
+  { id: '00000000-0000-4000-8000-000000000002', name: 'Camp Mug', description: 'Mug', price: { amount: '24', currency: 'USD' }, available: true },
+  { id: '00000000-0000-4000-8000-000000000003', name: 'Alpine Shell', description: 'Shell', price: { amount: '219', currency: 'USD' }, available: false },
 ];
+const variants = (product) => product.id.endsWith('2') ? [
+  { id: '10000000-0000-4000-8000-000000000001', title: 'Blue', price: { amount: '26.00', currency: 'USD' }, selectedOptions: { Colour: 'Blue' }, available: true },
+  { id: '10000000-0000-4000-8000-000000000002', title: 'Red', price: { amount: '28.00', currency: 'USD' }, selectedOptions: { Colour: 'Red' }, available: true },
+  { id: '10000000-0000-4000-8000-000000000003', title: 'Green', price: { amount: '24.00', currency: 'USD' }, selectedOptions: { Colour: 'Green' }, available: false },
+] : [{ id: '10000000-0000-4000-8000-000000000004', title: 'Default', price: product.price, selectedOptions: {}, available: product.available }];
 const carts = new Map();
 const requests = [];
 createServer(async (req, res) => {
@@ -15,6 +21,8 @@ createServer(async (req, res) => {
   if (url.pathname === '/__requests') return res.end(JSON.stringify(requests));
   if (url.pathname === `/v1/headless/stores/${storeId}/config`) return res.end(JSON.stringify({ data: { storeId, apiUrl: 'http://127.0.0.1:3101', publishableKey: 'pk_test_demo', apiVersion: 'v1', capabilities: ['catalog', 'cart', 'checkout-preparation'] }, requestId: 'r' }));
   if (url.pathname === '/v1/headless/products') return res.end(JSON.stringify({ data: products, nextCursor: null, requestId: 'r' }));
+  const variantProduct = products.find((p) => url.pathname === `/v1/headless/products/${p.id}/variants`);
+  if (variantProduct) return res.end(JSON.stringify({ data: variants(variantProduct), requestId: 'r' }));
   if (url.pathname === '/v1/headless/carts' && req.method === 'POST') {
     const token = `hc_${randomUUID().replaceAll('-', '').padEnd(43, 'a')}`;
     const cart = { id: randomUUID(), items: [], selectedPaymentMethodId: null, selectedShippingMethodId: null }; carts.set(token, cart);
@@ -24,12 +32,17 @@ createServer(async (req, res) => {
   if (url.pathname.startsWith('/v1/headless/carts/current') && !cart) { res.statusCode = 404; return res.end('{}'); }
   if (url.pathname === '/v1/headless/carts/current' && req.method === 'GET') return res.end(JSON.stringify({ data: cart, requestId: 'r' }));
   if (url.pathname === '/v1/headless/carts/current/items' && req.method === 'POST') {
-    cart.items.push({ id: randomUUID(), quantity: 1 }); res.statusCode = 201; return res.end(JSON.stringify({ data: cart, requestId: 'r' }));
+    const input = JSON.parse(raw);
+    const product = products.find((p) => p.id === input.productId);
+    const selected = product && variants(product).find((v) => v.id === input.variantId && v.available);
+    if (!selected) { res.statusCode = 400; return res.end('{}'); }
+    cart.items.push({ id: randomUUID(), requiresShipping: !product.id.endsWith('4'), quantity: input.quantity, variantId: selected.id, unitPrice: selected.price }); res.statusCode = 201; return res.end(JSON.stringify({ data: cart, requestId: 'r' }));
   }
-  const checkout = () => ({ ...cart, cart, shippingOptions: [{ id: 'shipping', name: 'Delivery' }], paymentMethods: [
+  const needsShipping = cart?.items.some(item => item.requiresShipping !== false);
+  const checkout = () => ({ ...cart, cart, shippingOptions: needsShipping ? [{ id: 'shipping', name: 'Delivery' }] : [], paymentMethods: [
     { id: 'card', name: 'Card with merchant provider', capabilities: { requiresHostedCheckout: true, canPlaceOrder: false } },
     { id: 'bank', name: 'Bank transfer', capabilities: { requiresHostedCheckout: false, canPlaceOrder: true } },
-  ], ready: Boolean(cart.selectedShippingMethodId && cart.selectedPaymentMethodId), missing: [] });
+  ], ready: Boolean((!needsShipping || cart.selectedShippingMethodId) && cart.selectedPaymentMethodId), missing: [] });
   if (url.pathname.endsWith('/checkout') && ['PATCH', 'GET'].includes(req.method)) return res.end(JSON.stringify({ data: checkout(), requestId: 'r' }));
   if (url.pathname.endsWith('/shipping-method') && req.method === 'PUT') { cart.selectedShippingMethodId = JSON.parse(raw).id; return res.end(JSON.stringify({ data: checkout(), requestId: 'r' })); }
   if (url.pathname.endsWith('/payment-method') && req.method === 'PUT') { cart.selectedPaymentMethodId = JSON.parse(raw).id; return res.end(JSON.stringify({ data: checkout(), requestId: 'r' })); }

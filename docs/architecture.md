@@ -9,3 +9,5 @@ Bootstrap is refreshed after at most 60 seconds and may only select the operator
 The UI dispatches hosted versus non-hosted checkout from the server's selected-method capabilities. It persists an intent across reloads, prevents simultaneous button dispatch and never interprets browser-return parameters as payment success. Hosted capture/refund initiation is not implemented in the starter. The container/Node package hosts presentation and the proxy, not the 1Ecomm backend.
 
 Local browser tests run against a deliberately small deterministic mock server. That server is test infrastructure only and is never bundled as an application fallback. Deployed-fixture qualification remains a separate fail-closed gate.
+
+The checkout form leaves state/province and postal-code requirements to the backend country catalog. A nonshipping checkout omits the shipping selector when the API offers no delivery options and reports no shipping-method gap. This does not implement a pickup-location chooser; the server still validates any persisted pickup choice. Digital fulfillment/download delivery is separate from omitting shipping requirements.
