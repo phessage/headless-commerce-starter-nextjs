@@ -51,3 +51,9 @@ The server sets a Secure HttpOnly cart cookie in production. After provider retu
 The package uses `GET /v1/headless/products/:id/variants`. **Deploy the compatible API before adopting this starter revision.** The first Add action loads choices. Multiple variants require an explicit selection; unavailable options cannot be chosen. API failure stops the add instead of choosing a default. Prices/availability displayed here are advisory; the cart and checkout validate them again.
 
 For maintainers, `npm run pack:customer` archives an allowlist from committed HEAD into `release/`; it never includes working-tree credentials, `.git`, installed dependencies, or CI fixture allocators. `npm run pack:check` installs and builds that exact archive in a temporary customer directory. Commit changes before packaging. These commands require a Git checkout; a customer can build/deploy the supplied archive without Git. CI artifacts remain private; delivery to an authorized merchant is still an operator step, not a public download service.
+
+## Shopper cart review (integration source)
+
+The cart panel restores the current cookie-backed cart, lists server-priced lines and totals, and supports quantity changes and removal through the existing cart endpoints. Cart edits clear checkout preparation so delivery/payment choices are checked again. An unconfirmed item update blocks further changes until the shopper refreshes the cart; mutations are not automatically retried. An empty cart cannot proceed to checkout. Initial cart loading and in-flight changes block conflicting add/payment actions.
+
+This source has compilation evidence only. The final acceptance SSOT tracks real persisted cart, quantity, removal, refresh and checkout validation before release.
