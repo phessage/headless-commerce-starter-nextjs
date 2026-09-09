@@ -7,11 +7,21 @@ type Product = {
   price: { amount: string; currency: string };
   available: boolean;
 };
+type Variant = { id: string; title: string; price: Product["price"]; selectedOptions: Record<string, string>; available: boolean };
 type Option = { id: string; name: string; capabilities?: { requiresHostedCheckout?: boolean; canPlaceOrder?: boolean } };
+type Cart = {
+  id: string;
+  currency: string;
+  items: Array<{ id: string; name: string; quantity: number; unitPrice: Product["price"]; totalPrice: Product["price"] }>;
+  totals: { subtotal: string; tax: string; taxIsEstimate: boolean; shipping: string; discount: string; total: string };
+};
+const money = (amount: string, currency: string) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(amount));
 type Preparation = {
+  cart: Cart;
   shippingOptions: Option[];
   paymentMethods: Option[];
   selectedPaymentMethodId: string | null;
+  selectedShippingMethodId: string | null;
   ready: boolean;
   missing: string[];
 };
@@ -22,6 +32,13 @@ const cartHeaders = (token?: string, json = false) => ({
   ...(json ? { "content-type": "application/json" } : {}),
 });
 export function Storefront() {
+  const addBusy = useRef(false);
+  const [adding, setAdding] = useState(false);
+  const [cart, setCart] = useState<Cart>();
+  const [cartLoading, setCartLoading] = useState(true);
+  const [cartUnavailable, setCartUnavailable] = useState(false);
+  const [variants, setVariants] = useState<Record<string, Variant[]>>({});
+  const [choices, setChoices] = useState<Record<string, string>>({});
   const paymentBusy = useRef(false);
   const [paying, setPaying] = useState(false);
 
@@ -44,12 +61,7 @@ export function Storefront() {
       })
       .then((v) => setProducts(v.data))
       .catch((e) => setError(e.message));
-    fetch('/api/headless/v1/headless/carts/current').then(async (r) => {
-      if (!r.ok) return;
-      const body = await r.json();
-      setCartId(body.data.id);
-      setCartCount(body.data.items.reduce((n: number, item: { quantity: number }) => n + item.quantity, 0));
-    }).catch(() => undefined);
+    void refreshCart();
     const number = sessionStorage.getItem('1ecomm-checkout-order');
     if (new URLSearchParams(window.location.search).has('checkout')) {
       setStatus(`Payment is not confirmed by this return page. ${number ? `Use order ${number} and your checkout email below to check its status.` : 'Check your order status below.'}`);
@@ -62,8 +74,72 @@ export function Storefront() {
       ),
     [products, query],
   );
+  function acceptCart(value: Cart) {
+    setCart(value);
+    setCartId(value.id);
+    setCartCount(value.items.reduce((count, item) => count + item.quantity, 0));
+  }
+  async function refreshCart() {
+    if (addBusy.current || paymentBusy.current) return;
+    addBusy.current = true;
+    setCartLoading(true);
+    setPreparation(undefined);
+    try {
+      const response = await fetch('/api/headless/v1/headless/carts/current');
+      if (response.status === 401 || response.status === 404) {
+        setCart(undefined); setCartId(''); setCartCount(0); setCartToken('');
+      } else {
+        if (!response.ok) throw new Error('Could not load your cart. Refresh it before continuing.');
+        acceptCart((await response.json()).data);
+      }
+      setCartUnavailable(false);
+    } catch {
+      setCartUnavailable(true);
+      setError('Could not load your cart. Refresh it before continuing.');
+    } finally { addBusy.current = false; setCartLoading(false); }
+  }
+  async function changeCart(itemId: string, quantity?: number) {
+    if (addBusy.current || paymentBusy.current || cartLoading || cartUnavailable || order) return;
+    addBusy.current = true; setAdding(true); setError(''); setPreparation(undefined);
+    try {
+      const response = await fetch(`/api/headless/v1/headless/carts/current/items/${encodeURIComponent(itemId)}`, {
+        method: quantity === undefined ? 'DELETE' : 'PATCH',
+        headers: cartHeaders(cartToken, quantity !== undefined),
+        ...(quantity !== undefined ? { body: JSON.stringify({ quantity }) } : {}),
+      });
+      if (!response.ok) throw new Error('Cart update was not confirmed. Refresh the cart before trying again.');
+      acceptCart((await response.json()).data);
+      setStatus(quantity === undefined ? 'Item removed from cart' : 'Cart quantity updated');
+    } catch (failure) {
+      setCartUnavailable(true);
+      setError(failure instanceof Error ? failure.message : 'Cart update was not confirmed. Refresh the cart.');
+    } finally { addBusy.current = false; setAdding(false); }
+  }
   async function add(product: Product) {
+    if (addBusy.current || paymentBusy.current || cartLoading || cartUnavailable || order) return;
+    addBusy.current = true;
+    setAdding(true);
+    setPreparation(undefined);
     setError("");
+    try {
+    let options = variants[product.id];
+    if (!options) {
+      const response = await fetch(`/api/headless/v1/headless/products/${encodeURIComponent(product.id)}/variants`);
+      if (!response.ok) throw new Error("Product options unavailable. Please try again later.");
+      const body = await response.json();
+      if (!Array.isArray(body.data) || body.data.some((v: Variant) =>
+        !v || typeof v.id !== 'string' || typeof v.title !== 'string' || typeof v.available !== 'boolean' ||
+        !v.price || typeof v.price.amount !== 'string' || !Number.isFinite(Number(v.price.amount)) || typeof v.price.currency !== 'string'
+      )) throw new Error("Product options unavailable");
+      options = body.data;
+      setVariants((previous) => ({ ...previous, [product.id]: options }));
+    }
+    const variant = options.find((v) => v.id === choices[product.id]) ?? (options.length === 1 ? options[0] : undefined);
+    if (!variant && options.length > 1) {
+      setStatus(`Choose an option for ${product.name}, then add it to your cart.`);
+      return;
+    }
+    if (!variant?.available) throw new Error("This product option is unavailable");
     let id = cartId,
       token = cartToken;
     if (!id) {
@@ -80,16 +156,25 @@ export function Storefront() {
     const r = await fetch("/api/headless/v1/headless/carts/current/items", {
       method: "POST",
       headers: cartHeaders(token, true),
-      body: JSON.stringify({ productId: product.id, quantity: 1 }),
+      body: JSON.stringify({ productId: product.id, variantId: variant.id, quantity: 1 }),
     });
     if (!r.ok) throw new Error("Add to cart failed");
-    setCartCount((v) => v + 1);
+    const updated = (await r.json()).data;
+    acceptCart(updated);
+    setPreparation(undefined);
     setStatus(`${product.name} added`);
+    } catch (failure) {
+      setCartUnavailable(true);
+      throw failure;
+    } finally { addBusy.current = false; setAdding(false); }
   }
   async function prepare(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (addBusy.current || paymentBusy.current || cartLoading || cartUnavailable) return;
     setError("");
     const f = new FormData(event.currentTarget);
+    addBusy.current = true; setAdding(true); setPreparation(undefined);
+    try {
     const address = {
       firstName: f.get("firstName"),
       lastName: f.get("lastName"),
@@ -114,14 +199,19 @@ export function Storefront() {
       }),
     });
     if (!r.ok) throw new Error("Checkout preparation failed");
-    setPreparation((await r.json()).data);
+    const prepared = (await r.json()).data;
+    setPreparation(prepared);
+    acceptCart(prepared.cart);
     setStatus("Checkout prepared");
+    } finally { addBusy.current = false; setAdding(false); }
   }
   async function select(
     kind: "shipping-method" | "payment-method",
     id: string,
   ) {
-    if (!id) return;
+    if (!id || addBusy.current || paymentBusy.current || cartLoading || cartUnavailable) return;
+    addBusy.current = true; setAdding(true); setPreparation(current => current ? { ...current, ready: false } : current);
+    try {
     const r = await fetch(
       `/api/headless/v1/headless/carts/current/checkout/${kind}`,
       {
@@ -131,10 +221,14 @@ export function Storefront() {
       },
     );
     if (!r.ok) throw new Error(`${kind} selection failed`);
-    setPreparation((await r.json()).data);
+    const prepared = (await r.json()).data;
+    setPreparation(prepared);
+    acceptCart(prepared.cart);
     setStatus(`${kind} selected`);
+    } finally { addBusy.current = false; setAdding(false); }
   }
   async function placeOrder() {
+    if (addBusy.current || cartLoading || cartUnavailable) return;
     if (!preparation?.ready) throw new Error("Checkout is not ready");
     const selected = preparation.paymentMethods.find(
       (method) => method.id === preparation.selectedPaymentMethodId,
@@ -227,12 +321,22 @@ export function Storefront() {
               <strong>
                 {new Intl.NumberFormat("en-US", {
                   style: "currency",
-                  currency: p.price.currency,
-                }).format(Number(p.price.amount))}
+                  currency: (variants[p.id]?.find((v) => v.id === choices[p.id])?.price ?? p.price).currency,
+                }).format(Number((variants[p.id]?.find((v) => v.id === choices[p.id])?.price ?? p.price).amount))}
               </strong>
+              {(variants[p.id]?.length ?? 0) > 1 && <label>
+                Variant for {p.name}
+                <select aria-label={`Variant for ${p.name}`} value={choices[p.id] ?? ''}
+                  onChange={(event) => setChoices((previous) => ({ ...previous, [p.id]: event.target.value }))}>
+                  <option value="" disabled>Choose an option</option>
+                  {variants[p.id].map((variant) => <option key={variant.id} value={variant.id} disabled={!variant.available}>
+                    {variant.title}{variant.available ? '' : ' (unavailable)'}
+                  </option>)}
+                </select>
+              </label>}
                 <button
                   data-product-id={p.id}
-                  disabled={!p.available}
+                  disabled={!p.available || adding || paying || cartLoading || cartUnavailable || !!order}
                 onClick={() => add(p).catch((e) => setError(e.message))}
               >
                 Add {p.name} to cart
@@ -243,7 +347,36 @@ export function Storefront() {
         {products.length > 0 && shown.length === 0 && (
           <p>No products match “{query}”.</p>
         )}
-        {cartId && (
+        <section className="checkout" aria-label="Your cart">
+          <h2>Your cart</h2>
+          {cartLoading && <p role="status">Loading cart…</p>}
+          <button disabled={adding || paying || cartLoading} onClick={() => void refreshCart()}>Refresh cart</button>
+          {cartUnavailable && <p role="alert">Cart state is uncertain. Refresh before making another change or checking out.</p>}
+          {!cartLoading && !cartUnavailable && !cart?.items.length && <p>Your cart is empty.</p>}
+          {cart && <>
+            <ul className="cart-lines">
+              {cart.items.map((item) => <li key={item.id}>
+                <strong>{item.name}</strong>
+                <span>{money(item.unitPrice.amount, item.unitPrice.currency)} each · {money(item.totalPrice.amount, item.totalPrice.currency)} for this line</span>
+                <div className="cart-quantity">
+                  <button aria-label={`Decrease quantity of ${item.name}`} disabled={item.quantity <= 1 || adding || paying || cartLoading || cartUnavailable || !!order} onClick={() => void changeCart(item.id, item.quantity - 1)}>−</button>
+                  <span aria-live="polite">Quantity: {item.quantity}</span>
+                  <button aria-label={`Increase quantity of ${item.name}`} disabled={adding || paying || cartLoading || cartUnavailable || !!order} onClick={() => void changeCart(item.id, item.quantity + 1)}>+</button>
+                  <button disabled={adding || paying || cartLoading || cartUnavailable || !!order} onClick={() => void changeCart(item.id)}>Remove {item.name}</button>
+                </div>
+              </li>)}
+            </ul>
+            {cart.items.length > 0 && <dl className="cart-totals">
+              <dt>Subtotal</dt><dd>{money(cart.totals.subtotal, cart.currency)}</dd>
+              <dt>Discount</dt><dd>{money(cart.totals.discount, cart.currency)}</dd>
+              <dt>Shipping</dt><dd>{money(cart.totals.shipping, cart.currency)}</dd>
+              <dt>Tax{cart.totals.taxIsEstimate ? ' (estimated)' : ''}</dt><dd>{money(cart.totals.tax, cart.currency)}</dd>
+              <dt>Current total</dt><dd>{money(cart.totals.total, cart.currency)}</dd>
+            </dl>}
+            <p>Totals come from your cart. Delivery, taxes and availability are checked again at checkout.</p>
+          </>}
+        </section>
+        {cartId && cartCount > 0 && !cartUnavailable && (
           <section className="checkout" aria-label="Checkout preparation">
             <h2>Prepare checkout</h2>
             <form
@@ -283,14 +416,12 @@ export function Storefront() {
               <input
                 name="state"
                 aria-label="State"
-                placeholder="BC"
-                required
+                placeholder="State/province, when required"
               />
               <input
                 name="postalCode"
                 aria-label="Postal code"
-                placeholder="V6B 1A1"
-                required
+                placeholder="Postal code, when required"
               />
               <input
                 name="countryCode"
@@ -298,15 +429,16 @@ export function Storefront() {
                 defaultValue="CA"
                 required
               />
-              <button>Load delivery and payment options</button>
+              <button disabled={adding || paying || cartLoading}>Load delivery and payment options</button>
             </form>
             {preparation && (
               <div className="options">
-                <label>
+                {(preparation.shippingOptions.length > 0 || preparation.missing.includes("shippingMethod")) && <label>
                   Shipping method
                   <select
                     aria-label="Shipping method"
-                    defaultValue=""
+                    value={preparation.selectedShippingMethodId ?? ""}
+                    disabled={adding || paying}
                     onChange={(e) =>
                       select("shipping-method", e.target.value).catch((x) =>
                         setError(x.message),
@@ -322,12 +454,13 @@ export function Storefront() {
                       </option>
                     ))}
                   </select>
-                </label>
+                </label>}
                 <label>
                   Payment method
                   <select
                     aria-label="Payment method"
-                    defaultValue=""
+                    value={preparation.selectedPaymentMethodId ?? ""}
+                    disabled={adding || paying}
                     onChange={(e) =>
                       select("payment-method", e.target.value).catch((x) =>
                         setError(x.message),
@@ -352,7 +485,7 @@ export function Storefront() {
                 {!order && (
                   <button
                     data-testid="checkout-submit"
-                    disabled={!preparation.ready || paying}
+                    disabled={!preparation.ready || paying || adding || cartLoading || cartUnavailable}
                     onClick={() =>
                       placeOrder().catch((x) => setError(x.message))
                     }

@@ -7,9 +7,9 @@ This Next.js App Router starter uses 1Ecomm's managed commerce backend. The brow
 ## Run it
 
 1. Install Node.js 20 or newer.
-2. Open `headless.config.json` and replace only `storeId` with your provisioned 1Ecomm store ID. The included ID is a safe test fixture.
+2. Copy `.env.example` to `.env` and set `HEADLESS_STORE_ID` to your provisioned 1Ecomm store ID, or use the `.env` downloaded from the merchant connection dialog. The included store ID is a test fixture, not a merchant deployment identity.
 
-The required CI browser gate allocates its own expiring fixture, injects that runtime into the server proxy, drives the real deployed catalog/cart/checkout/order/lookup APIs, and always revokes the temporary key. Local merchant setup remains store-ID-only.
+The manually dispatched **Post-deployment order acceptance** workflow allocates an expiring fixture after compatible deployment, injects that runtime into the server proxy, drives the real deployed catalog/cart/checkout/order/lookup APIs, and releases the fixture. During development, integration/wave branches run compilation only; final local tests precede main release. Local merchant setup remains store-ID-only.
 3. Run:
 
 ```bash
@@ -43,3 +43,17 @@ Place a TLS reverse proxy in front of port 3000, preserve the public request hos
 `HEADLESS_STORE_ID` is read server-side at runtime, so the same image can be configured for your store. The default trusted API/bootstrap is `https://api.1ecomm.com`. Advanced operators may explicitly set `HEADLESS_BOOTSTRAP_URL` and `HEADLESS_API_URL` to approved HTTPS origins; bootstrap cannot redirect the server to a different trust root. Development permits loopback HTTP. Production refuses the included example store ID. Editing the imported JSON after compilation is not the runtime configuration mechanism.
 
 The server sets a Secure HttpOnly cart cookie in production. After provider return, the page asks the shopper to check the order using its number and checkout email; a query parameter never marks an order paid. Complete a qualified test checkout before opening sales. SDK/backend commercial policy, zero commissions, subscription pricing and merchant settlement responsibility must be qualified separately.
+
+## Authorized customer source package
+
+1ecomm can supply a licensed source archive plus `manifest.json` and `SHA256SUMS` to an authorized customer. Receiving this archive does not require access to the private GitHub repository or npm registry. Verify the checksum, extract into a new directory, run `npm ci`, configure your store using `.env.example`, then `npm run build` and `npm start`. Keep the license notices. This is a Node.js/Docker storefront connected to 1ecomm's API, not a copy of the commerce backend. Static hosting alone cannot run the proxy or cart cookies.
+
+The package uses `GET /v1/headless/products/:id/variants`. **Deploy the compatible API before adopting this starter revision.** The first Add action loads choices. Multiple variants require an explicit selection; unavailable options cannot be chosen. API failure stops the add instead of choosing a default. Prices/availability displayed here are advisory; the cart and checkout validate them again.
+
+For maintainers, `npm run pack:customer` archives an allowlist from committed HEAD into `release/`; it never includes working-tree credentials, `.git`, installed dependencies, or CI fixture allocators. `npm run pack:check` installs and builds that exact archive in a temporary customer directory. Commit changes before packaging. These commands require a Git checkout; a customer can build/deploy the supplied archive without Git. CI artifacts remain private; delivery to an authorized merchant is still an operator step, not a public download service.
+
+## Shopper cart review (integration source)
+
+The cart panel restores the current cookie-backed cart, lists server-priced lines and totals, and supports quantity changes and removal through the existing cart endpoints. Cart edits clear checkout preparation so delivery/payment choices are checked again. An unconfirmed item update blocks further changes until the shopper refreshes the cart; mutations are not automatically retried. An empty cart cannot proceed to checkout. Initial cart loading and in-flight changes block conflicting add/payment actions.
+
+This source has compilation evidence only. The final acceptance SSOT tracks real persisted cart, quantity, removal, refresh and checkout validation before release.

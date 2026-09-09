@@ -1,3 +1,23 @@
+# 1ecomm development mode — owner directive, 2026-09-09
+
+This directive supersedes older instructions about per-task testing, immediate main merges, primary-checkout switching and development-time compatibility work. Read the relevant ecommerce-docs SSOT before implementation and extend existing services.
+
+- Preserve every existing checkout's active branch and other agents' work. Fetch origin and create each program integration branch from the latest origin/main. Current program: integration/saas-launch-20260909. Work in isolated Git worktrees on unique wave/* branches based on the current integration tip.
+- PR/squash merge each functional batch into the integration branch, never main during implementation. Keep normal main release checks. Integration/wave push and integration-target PR builds are deferred with scoped workflow filters, not a repository-wide Actions shutdown. Do not dispatch tests, builds or live workflows during this phase.
+- During implementation, create no new tests and run no unit, integration, browser, migration or security test suites. Verify changed code compiles/typechecks. Avoid scripts that bundle tests with compilation. Retain existing tests. Record new/changed behavior and every pending validation in the test SSOT; do not claim compilation proves runtime behavior.
+- Update the master checklist after each batch. Track implementation/compile status separately from local-test and deployed-validation status. An implemented item can be closed in the implementation checklist while its explicitly separate validation remains pending.
+- Once all agreed functionality is implemented, enter the final local stage: create/update the tests from the test SSOT, apply the program's generated migrations to an isolated local database, run the relevant combined local acceptance pass and fix failures. Do not add irrelevant suites.
+- After final local acceptance passes, PR/merge integration branches into main, apply the program's production application migrations through the normal release path and monitor deployment. This is the owner's conditional authorization for that final release; do not ask again for routine actions within its reviewed scope. Enumerate the exact migration set first. Unrelated shared-database changes, credentials, destructive cleanup and unreviewed migration backlogs are outside this authorization.
+- After production deployment, create/run real Playwright UI end-to-end acceptance against the deployed application. Exercise actual screens and network calls, assert persisted outcomes and rendered results, record evidence and clean up isolated fixtures. No mocked API responses, skipped prerequisites or fabricated UI proof.
+- The system is in development. Do not add compatibility shims, legacy adapters or speculative security/compliance work as separate waves. Prioritize usable functionality; keep normal authorization, tenant scoping, payment correctness and credential handling intact as part of correct behavior.
+- Keep SSOT and user-facing Help Hub content current. Remove only your merged batch worktrees/branches after recording restore SHAs. Keep the integration branch until the final main release; never delete another agent's work.
+
+Program master checklist: ecommerce-docs/ssot/saas-launch-master-checklist.md.
+Deferred validation: ecommerce-docs/ssot/tests/saas-launch-final-validation.md.
+Shared engineering guide: ecommerce-docs/engineering-guide.md (integration branch during development).
+
+---
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
@@ -34,3 +54,5 @@ The API owns tenant scope, pricing, inventory, shipping/payment eligibility and 
 ## Verification
 
 Run `rm -rf node_modules .next && npm ci`, `npm run check`, and the deployed sandbox journey when authorized. Assert upstream method/path/headers and rendered results. Dependency upgrades require stable releases, lockfile, build and Playwright proof. Never clone production data.
+
+Active documentation may exist only on the ecommerce-docs integration ref. Read it with git show origin/integration/saas-launch-20260909:ssot/saas-launch-master-checklist.md (and the tests SSOT) in that repository; do not switch its checkout or treat the primary main copy as the new program state.

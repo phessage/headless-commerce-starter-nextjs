@@ -30,3 +30,10 @@
 .options p {
   grid-column: 1/-1;
 }
+
+.cart-lines { list-style: none; padding: 0; }
+.cart-lines li { display: grid; gap: .6rem; padding: 1rem 0; border-bottom: 1px solid #ddd; }
+.cart-quantity { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.cart-totals { display: grid; grid-template-columns: 1fr auto; gap: .5rem; }
+.cart-totals dd { margin: 0; text-align: right; }
+.checkout button:disabled { opacity: .5; cursor: not-allowed; }
