@@ -21,6 +21,7 @@ type Preparation = {
   shippingOptions: Option[];
   paymentMethods: Option[];
   selectedPaymentMethodId: string | null;
+  selectedShippingMethodId: string | null;
   ready: boolean;
   missing: string[];
 };
@@ -209,7 +210,7 @@ export function Storefront() {
     id: string,
   ) {
     if (!id || addBusy.current || paymentBusy.current || cartLoading || cartUnavailable) return;
-    addBusy.current = true; setAdding(true); setPreparation(undefined);
+    addBusy.current = true; setAdding(true); setPreparation(current => current ? { ...current, ready: false } : current);
     try {
     const r = await fetch(
       `/api/headless/v1/headless/carts/current/checkout/${kind}`,
@@ -436,7 +437,8 @@ export function Storefront() {
                   Shipping method
                   <select
                     aria-label="Shipping method"
-                    defaultValue=""
+                    value={preparation.selectedShippingMethodId ?? ""}
+                    disabled={adding || paying}
                     onChange={(e) =>
                       select("shipping-method", e.target.value).catch((x) =>
                         setError(x.message),
@@ -457,7 +459,8 @@ export function Storefront() {
                   Payment method
                   <select
                     aria-label="Payment method"
-                    defaultValue=""
+                    value={preparation.selectedPaymentMethodId ?? ""}
+                    disabled={adding || paying}
                     onChange={(e) =>
                       select("payment-method", e.target.value).catch((x) =>
                         setError(x.message),

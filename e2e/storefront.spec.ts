@@ -67,3 +67,20 @@ test('reviews, updates, restores and removes cart lines through the proxy', asyn
   await expect(cart.getByText('Your cart is empty.')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Checkout preparation' })).toHaveCount(0);
 });
+
+test('keeps server-selected delivery and payment visible after selection', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Add Trail Pack 24L to cart' }).click();
+  await page.getByLabel('Email', { exact: true }).fill('shopper@example.test');
+  await page.getByLabel('First name').fill('Test');
+  await page.getByLabel('Last name').fill('Shopper');
+  await page.getByLabel('Address', { exact: true }).fill('1 Test Way');
+  await page.getByLabel('City', { exact: true }).fill('Vancouver');
+  await page.getByRole('button', { name: 'Load delivery and payment options' }).click();
+  await page.getByLabel('Shipping method').selectOption('shipping');
+  await expect(page.getByLabel('Shipping method')).toHaveValue('shipping');
+  await page.getByLabel('Payment method').selectOption('bank');
+  await expect(page.getByLabel('Payment method')).toHaveValue('bank');
+  await expect(page.getByLabel('Shipping method')).toHaveValue('shipping');
+  await expect(page.getByTestId('checkout-submit')).toBeEnabled();
+});
