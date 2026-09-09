@@ -43,3 +43,27 @@ test('does not create a cart or choose a default when variant lookup fails', asy
   await expect(page.getByRole('alert').filter({ hasText: 'Product options unavailable' })).toBeVisible();
   expect(creates).toEqual([]);
 });
+
+test('reviews, updates, restores and removes cart lines through the proxy', async ({ page }) => {
+  await page.goto('/');
+  const add = page.getByRole('button', { name: 'Add Trail Pack 24L to cart' });
+  await expect(add).toBeEnabled();
+  await add.click();
+  const cart = page.getByRole('region', { name: 'Your cart', exact: true });
+  await expect(cart.getByText('Quantity: 1')).toBeVisible();
+  const changed = page.waitForResponse(r => /\/carts\/current\/items\/[0-9a-f-]+$/.test(r.url()) && r.request().method() === 'PATCH');
+  await cart.getByRole('button', { name: 'Increase quantity of Trail Pack 24L' }).click();
+  const response = await changed;
+  expect(response.status()).toBe(200);
+  expect(response.request().postDataJSON()).toEqual({ quantity: 2 });
+  expect((await response.json()).data.totals.total).toBe('178.00');
+  await expect(cart.getByText('Quantity: 2')).toBeVisible();
+  await expect(cart.locator('dd').last()).toHaveText('$178.00');
+  await page.reload();
+  await expect(cart.getByText('Quantity: 2')).toBeVisible();
+  const removed = page.waitForResponse(r => r.request().method() === 'DELETE' && r.url().includes('/carts/current/items/'));
+  await cart.getByRole('button', { name: 'Remove Trail Pack 24L' }).click();
+  expect((await (await removed).json()).data.items).toEqual([]);
+  await expect(cart.getByText('Your cart is empty.')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Checkout preparation' })).toHaveCount(0);
+});
