@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 type Product = {
   id: string;
   name: string;
@@ -22,6 +22,9 @@ const cartHeaders = (token?: string, json = false) => ({
   ...(json ? { "content-type": "application/json" } : {}),
 });
 export function Storefront() {
+  const paymentBusy = useRef(false);
+  const [paying, setPaying] = useState(false);
+
   const [products, setProducts] = useState<Product[]>([]),
     [query, setQuery] = useState(""),
     [cartCount, setCartCount] = useState(0),
@@ -41,6 +44,16 @@ export function Storefront() {
       })
       .then((v) => setProducts(v.data))
       .catch((e) => setError(e.message));
+    fetch('/api/headless/v1/headless/carts/current').then(async (r) => {
+      if (!r.ok) return;
+      const body = await r.json();
+      setCartId(body.data.id);
+      setCartCount(body.data.items.reduce((n: number, item: { quantity: number }) => n + item.quantity, 0));
+    }).catch(() => undefined);
+    const number = sessionStorage.getItem('1ecomm-checkout-order');
+    if (new URLSearchParams(window.location.search).has('checkout')) {
+      setStatus(`Payment is not confirmed by this return page. ${number ? `Use order ${number} and your checkout email below to check its status.` : 'Check your order status below.'}`);
+    }
   }, []);
   const shown = useMemo(
     () =>
@@ -126,30 +139,45 @@ export function Storefront() {
     const selected = preparation.paymentMethods.find(
       (method) => method.id === preparation.selectedPaymentMethodId,
     );
-    if (
-      selected?.capabilities?.requiresHostedCheckout !== false ||
-      selected.capabilities.canPlaceOrder !== true
-    ) {
-      throw new Error("Choose a supported non-hosted payment method");
+    const hosted = selected?.capabilities?.requiresHostedCheckout === true;
+    if (!hosted && (selected?.capabilities?.requiresHostedCheckout !== false || selected.capabilities.canPlaceOrder !== true)) {
+      throw new Error("Choose a supported payment method");
     }
-    const intent = orderIntent || crypto.randomUUID();
+    if (paymentBusy.current) return;
+    paymentBusy.current = true;
+    setPaying(true);
+    try {
+    const storageKey = `1ecomm-checkout-intent:${cartId}`;
+    const intent = orderIntent || sessionStorage.getItem(storageKey) || crypto.randomUUID();
+    sessionStorage.setItem(storageKey, intent);
     setOrderIntent(intent);
     const response = await fetch(
-      "/api/headless/v1/headless/carts/current/checkout/order",
+      `/api/headless/v1/headless/carts/current/checkout/${hosted ? "payment-session" : "order"}`,
       {
         method: "POST",
         headers: {
-          ...cartHeaders(cartToken),
+          ...cartHeaders(cartToken, hosted),
           "Idempotency-Key": intent,
         },
+        ...(hosted ? { body: JSON.stringify({ successUrl: `${window.location.origin}/?checkout=returned`, cancelUrl: `${window.location.origin}/?checkout=cancelled` }) } : {}),
       },
     );
     if (!response.ok) {
       const problem = await response.json().catch(() => null) as { detail?: string; title?: string } | null;
       throw new Error(problem?.detail ?? problem?.title ?? `Order placement failed (${response.status})`);
     }
-    setOrder((await response.json()).data);
-    setStatus("Order placed without hosted payment");
+    const result = (await response.json()).data;
+    setOrder(result);
+    sessionStorage.setItem('1ecomm-checkout-order', result.orderNumber);
+    if (hosted) {
+      const destination = new URL(result.checkoutUrl);
+      if (destination.protocol !== 'https:' || destination.username || destination.password) throw new Error('Invalid payment destination');
+      setStatus('Continue with the payment provider. Your order is awaiting payment confirmation.');
+      window.location.assign(destination.toString());
+    } else {
+      setStatus('Order placed without hosted payment');
+    }
+    } finally { paymentBusy.current = false; setPaying(false); }
   }
   async function lookupOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setOrderStatus(undefined);
@@ -187,7 +215,7 @@ export function Storefront() {
           </span>
         </section>
         {error && <p role="alert">{error}</p>}
-        <p aria-live="polite">{status}</p>
+        <p data-testid="storefront-status" aria-live="polite">{status}</p>
         <section aria-label="Products" className="grid">
           {shown.map((p) => (
             <article key={p.id}>
@@ -323,12 +351,13 @@ export function Storefront() {
                 </p>
                 {!order && (
                   <button
-                    disabled={!preparation.ready}
+                    data-testid="checkout-submit"
+                    disabled={!preparation.ready || paying}
                     onClick={() =>
                       placeOrder().catch((x) => setError(x.message))
                     }
                   >
-                    Place pending order
+                    {paying ? 'Opening checkout…' : preparation.paymentMethods.find((method) => method.id === preparation.selectedPaymentMethodId)?.capabilities?.requiresHostedCheckout ? 'Continue to payment' : 'Place pending order'}
                   </button>
                 )}
                 {order && (
