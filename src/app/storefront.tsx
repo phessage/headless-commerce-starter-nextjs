@@ -323,14 +323,12 @@ export function Storefront() {
               <input
                 name="state"
                 aria-label="State"
-                placeholder="BC"
-                required
+                placeholder="State/province, when required"
               />
               <input
                 name="postalCode"
                 aria-label="Postal code"
-                placeholder="V6B 1A1"
-                required
+                placeholder="Postal code, when required"
               />
               <input
                 name="countryCode"
@@ -342,7 +340,7 @@ export function Storefront() {
             </form>
             {preparation && (
               <div className="options">
-                <label>
+                {(preparation.shippingOptions.length > 0 || preparation.missing.includes("shippingMethod")) && <label>
                   Shipping method
                   <select
                     aria-label="Shipping method"
@@ -362,7 +360,7 @@ export function Storefront() {
                       </option>
                     ))}
                   </select>
-                </label>
+                </label>}
                 <label>
                   Payment method
                   <select

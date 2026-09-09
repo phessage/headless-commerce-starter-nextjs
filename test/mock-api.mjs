@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 const storeId = '01f5b02f-d7c0-42cd-b880-59f78ea70aa3';
 const products = [
+  { id: '00000000-0000-4000-8000-000000000004', name: 'Digital Guide', description: 'Guide', price: { amount: '10', currency: 'USD' }, available: true },
   { id: '00000000-0000-4000-8000-000000000001', name: 'Trail Pack 24L', description: 'Pack', price: { amount: '89', currency: 'USD' }, available: true },
   { id: '00000000-0000-4000-8000-000000000002', name: 'Camp Mug', description: 'Mug', price: { amount: '24', currency: 'USD' }, available: true },
   { id: '00000000-0000-4000-8000-000000000003', name: 'Alpine Shell', description: 'Shell', price: { amount: '219', currency: 'USD' }, available: false },
@@ -35,12 +36,13 @@ createServer(async (req, res) => {
     const product = products.find((p) => p.id === input.productId);
     const selected = product && variants(product).find((v) => v.id === input.variantId && v.available);
     if (!selected) { res.statusCode = 400; return res.end('{}'); }
-    cart.items.push({ id: randomUUID(), quantity: input.quantity, variantId: selected.id, unitPrice: selected.price }); res.statusCode = 201; return res.end(JSON.stringify({ data: cart, requestId: 'r' }));
+    cart.items.push({ id: randomUUID(), requiresShipping: !product.id.endsWith('4'), quantity: input.quantity, variantId: selected.id, unitPrice: selected.price }); res.statusCode = 201; return res.end(JSON.stringify({ data: cart, requestId: 'r' }));
   }
-  const checkout = () => ({ ...cart, cart, shippingOptions: [{ id: 'shipping', name: 'Delivery' }], paymentMethods: [
+  const needsShipping = cart?.items.some(item => item.requiresShipping !== false);
+  const checkout = () => ({ ...cart, cart, shippingOptions: needsShipping ? [{ id: 'shipping', name: 'Delivery' }] : [], paymentMethods: [
     { id: 'card', name: 'Card with merchant provider', capabilities: { requiresHostedCheckout: true, canPlaceOrder: false } },
     { id: 'bank', name: 'Bank transfer', capabilities: { requiresHostedCheckout: false, canPlaceOrder: true } },
-  ], ready: Boolean(cart.selectedShippingMethodId && cart.selectedPaymentMethodId), missing: [] });
+  ], ready: Boolean((!needsShipping || cart.selectedShippingMethodId) && cart.selectedPaymentMethodId), missing: [] });
   if (url.pathname.endsWith('/checkout') && ['PATCH', 'GET'].includes(req.method)) return res.end(JSON.stringify({ data: checkout(), requestId: 'r' }));
   if (url.pathname.endsWith('/shipping-method') && req.method === 'PUT') { cart.selectedShippingMethodId = JSON.parse(raw).id; return res.end(JSON.stringify({ data: checkout(), requestId: 'r' })); }
   if (url.pathname.endsWith('/payment-method') && req.method === 'PUT') { cart.selectedPaymentMethodId = JSON.parse(raw).id; return res.end(JSON.stringify({ data: checkout(), requestId: 'r' })); }
