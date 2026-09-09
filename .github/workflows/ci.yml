@@ -1,5 +1,9 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore: ["integration/**", "wave/**"]
+  pull_request:
+    branches-ignore: ["integration/**"]
 permissions: { contents: read }
 jobs:
   browser:
