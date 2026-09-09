@@ -4,12 +4,13 @@ permissions: { contents: read }
 jobs:
   browser:
     runs-on: ubuntu-latest
+    # Match @playwright/test; browsers and OS libraries are supplied together.
+    container: mcr.microsoft.com/playwright:v1.62.1-noble
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
       - run: npm run check
       - run: npm run pack:check
       - uses: actions/upload-artifact@v4
