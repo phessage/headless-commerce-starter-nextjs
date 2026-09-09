@@ -14,8 +14,12 @@ test("places and renders a real non-hosted order through the server proxy", asyn
       r.url().endsWith("/v1/headless/carts/current/items") &&
       r.status() === 201,
   );
-  await add.click();
-  await added;
+  const variants = page.waitForResponse((r) => r.url().endsWith(`/products/${productId}/variants`)).then(async (response) => {
+    expect(response.status(), 'Deploy the compatible public variants API before adopting this starter').toBe(200);
+    const body = await response.json();
+    expect(body.data.map((variant: { id: string }) => variant.id)).toEqual([process.env.HEADLESS_VARIANT_ID]);
+  });
+  await Promise.all([added, variants, add.click()]);
   await expect(page.getByText("Cart (1)")).toBeVisible();
   await page.getByLabel("Email", { exact: true }).fill("next-live@example.test");
   await page.getByLabel("First name").fill("Headless");
