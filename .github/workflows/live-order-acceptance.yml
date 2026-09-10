@@ -12,10 +12,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cart-mode: [nonshipping, physical, mixed]
+        requires-shipping: [false, true]
     env:
-      HEADLESS_CART_MODE: ${{ matrix.cart-mode }}
-      HEADLESS_REQUIRE_SHIPPING: ${{ matrix.cart-mode != 'nonshipping' }}
+      HEADLESS_REQUIRE_SHIPPING: ${{ matrix.requires-shipping }}
     timeout-minutes: 15
     container: mcr.microsoft.com/playwright:v1.62.1-noble
     steps:
