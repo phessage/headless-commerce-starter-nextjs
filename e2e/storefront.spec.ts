@@ -1,4 +1,23 @@
 import { expect, test } from '@playwright/test';
+
+test('refresh resolves a committed cart update and clears its stale error', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Add Trail Pack 24L to cart' }).click();
+  await expect(page.getByText('Quantity: 1', { exact: true })).toBeVisible();
+  await page.route('**/carts/current/items/*', async route => {
+    const committed = await route.fetch({ maxRetries: 0, maxRedirects: 0 });
+    expect(committed.status()).toBe(200);
+    expect((await committed.json()).data.items[0].quantity).toBe(2);
+    await route.abort('failed');
+  }, { times: 1 });
+  await page.getByRole('button', { name: 'Increase quantity of Trail Pack 24L' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Cart state is uncertain.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Increase quantity of Trail Pack 24L' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Refresh cart', exact: true }).click();
+  await expect(page.getByText('Quantity: 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Increase quantity of Trail Pack 24L' })).toBeEnabled();
+});
 test('loads catalog through the real route and updates cart UI',async({page})=>{
   const catalog=page.waitForResponse(r=>r.url().includes('/api/products')&&r.status()===200);
   await page.goto('/'); const response=await catalog; expect((await response.json()).data).toHaveLength(4);

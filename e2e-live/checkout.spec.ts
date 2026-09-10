@@ -66,7 +66,7 @@ test("places and renders the allocated fulfillment order through the server prox
   expect(recovered.status()).toBe(200);
   expect((await recovered.json()).data.items[0]).toMatchObject({ id: itemId, quantity: 3 });
   await expect(page.getByText('Quantity: 3', { exact: true })).toBeVisible();
-  await expect(page.getByRole('alert').filter({ hasText: 'Cart state is uncertain.' })).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
   expect(mutationRequests).toBe(1);
   page.off('request', countMutation);
   const [removed] = await Promise.all([

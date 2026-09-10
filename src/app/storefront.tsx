@@ -92,6 +92,7 @@ export function Storefront() {
         if (!response.ok) throw new Error('Could not load your cart. Refresh it before continuing.');
         acceptCart((await response.json()).data);
       }
+      if (cartUnavailable) setError('');
       setCartUnavailable(false);
     } catch {
       setCartUnavailable(true);
