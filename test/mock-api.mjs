@@ -21,6 +21,7 @@ const priceCart = (cart) => {
   return cart;
 };
 const carts = new Map();
+const orders = new Map();
 const requests = [];
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1:3101'); res.setHeader('content-type', 'application/json');
@@ -62,6 +63,7 @@ createServer(async (req, res) => {
   if (url.pathname.endsWith('/checkout') && req.method === 'PATCH') {
     const input = JSON.parse(raw);
     if (input.fulfillment) cart.fulfillment = input.fulfillment;
+    if (input.customerInfo?.email) cart.email = input.customerInfo.email;
     if (input.billingAddress) cart.billingAddress = input.billingAddress;
     if (input.shippingAddress) cart.shippingAddress = input.shippingAddress.sameAsBilling ? { ...cart.billingAddress, sameAsBilling: true } : input.shippingAddress;
   }
@@ -81,7 +83,14 @@ createServer(async (req, res) => {
     return res.end(JSON.stringify({ data: { orderId: 'order-1', orderNumber: 'ORD1', status: 'pending', paymentStatus: 'pending', sessionId: 'cs_test_fixture', checkoutUrl: 'https://checkout.stripe.com/fixture' }, requestId: 'r' }));
   }
   if (url.pathname.endsWith('/checkout/order') && req.method === 'POST') {
-    res.statusCode = 201; return res.end(JSON.stringify({ data: { orderId: 'order-1', orderNumber: 'ORD1', status: 'pending', paymentStatus: 'pending', requiresPayment: false }, requestId: 'r' }));
+    const orderNumber = `ORD-${randomUUID()}`;
+    const pickup = cart.fulfillment?.mode === 'pickup';
+    orders.set(orderNumber, { email: cart.email, orderNumber, status: 'pending', paymentStatus: 'pending', tracking: null, fulfillment: { mode: pickup ? 'pickup' : 'ship', pickupLocationId: pickup ? cart.fulfillment.pickupLocationId : null, pickupStatus: pickup ? 'pending' : null, pickupReadyAt: null, pickupLocation: pickup ? { id: cart.fulfillment.pickupLocationId, name: 'Saved downtown pickup', addressLine1: '1 Saved Street', phone: '555-0100' } : null } });
+    res.statusCode = 201; return res.end(JSON.stringify({ data: { orderId: 'order-1', orderNumber, status: 'pending', paymentStatus: 'pending', requiresPayment: false }, requestId: 'r' }));
+  }
+  if (url.pathname.endsWith('/orders/lookup') && req.method === 'POST') {
+    const input = JSON.parse(raw); const order = orders.get(input.orderNumber);
+    if (order && order.email === input.email) { const { email, ...data } = order; return res.end(JSON.stringify({ data, requestId: 'r' })); }
   }
   res.statusCode = 404; res.end('{}');
 }).listen(3101, '127.0.0.1');

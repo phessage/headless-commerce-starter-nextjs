@@ -138,3 +138,33 @@ test('persists pickup then delivery and renders eligible location information', 
   await page.getByLabel('Delivery or pickup').selectOption('ship');
   await expect(page.getByLabel('Shipping method')).toBeVisible();
 });
+
+for (const lookupFails of [false, true]) test(`pickup placement preserves its result when initial lookup fails: ${lookupFails}`, async ({ page }) => {
+  let placements = 0; const lookups: Record<string, string>[] = [];
+  page.on('request', request => {
+    if (request.url().endsWith('/checkout/order')) placements++;
+    if (request.url().endsWith('/orders/lookup')) lookups.push(request.postDataJSON());
+  });
+  await page.goto('/'); await page.getByRole('button', { name: 'Add Trail Pack 24L to cart' }).click();
+  for (const [label, value] of Object.entries({ Email: 'pickup@example.test', 'First name': 'Ada', 'Last name': 'Buyer', Address: '1 Main', City: 'Vancouver', State: 'BC', 'Postal code': 'V6B 1A1' })) await page.getByLabel(label, { exact: true }).fill(value);
+  await page.getByRole('button', { name: 'Load delivery and payment options' }).click();
+  await page.getByLabel('Delivery or pickup').selectOption('20000000-0000-4000-8000-000000000001');
+  await page.getByLabel('Payment method').selectOption('bank');
+  if (lookupFails) await page.route('**/orders/lookup', route => route.abort(), { times: 1 });
+  const placed = page.waitForResponse(r => r.url().endsWith('/checkout/order'));
+  await page.getByTestId('checkout-submit').click();
+  const result = (await (await placed).json()).data;
+  await expect.poll(() => lookups.length).toBe(1);
+  expect(lookups[0]).toEqual({ orderNumber: result.orderNumber, email: 'pickup@example.test' });
+  if (lookupFails) {
+    await expect(page.getByText('Order placed. Use Find your order to load its latest fulfillment details.', { exact: true })).toBeVisible();
+    await page.getByLabel('Order number', { exact: true }).fill(result.orderNumber);
+    await page.getByLabel('Order email', { exact: true }).fill('pickup@example.test');
+    await page.getByRole('button', { name: 'Check order status' }).click();
+  }
+  const details = page.getByRole('region', { name: 'Order status', exact: true }).getByRole('region', { name: 'Pickup details', exact: true });
+  await expect(details.getByText('Saved downtown pickup', { exact: true })).toBeVisible();
+  await expect(details.getByText('1 Saved Street', { exact: true })).toBeVisible();
+  await expect(details.getByText('Wait until your order is ready for pickup before visiting.', { exact: true })).toBeVisible();
+  expect(placements).toBe(1);
+});
