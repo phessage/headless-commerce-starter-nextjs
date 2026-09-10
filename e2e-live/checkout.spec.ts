@@ -9,6 +9,11 @@ test("places and renders the allocated fulfillment order through the server prox
   const pickup = process.env.HEADLESS_PICKUP === "true";
   const requiresShipping = process.env.HEADLESS_REQUIRE_SHIPPING === "true";
   if (!productId || !process.env.HEADLESS_PUBLISHABLE_KEY) throw new Error("Allocated fixture environment is required");
+  if (process.env.HEADLESS_STOREFRONT_URL) {
+    const health = await page.request.get('/api/health');
+    expect(health.ok()).toBe(true);
+    expect(await health.json()).toMatchObject({ status: 'ready', storeId: process.env.HEADLESS_STORE_ID, deploymentMode: 'acceptance' });
+  }
   await page.goto("/");
   const add = page.locator(
     `button[data-product-id="${productId}"]`,
@@ -29,6 +34,9 @@ test("places and renders the allocated fulfillment order through the server prox
   expect(initialCart.items).toHaveLength(1);
   const itemId = initialCart.items[0].id;
   expect(initialCart.items[0].variantId).toBe(process.env.HEADLESS_VARIANT_ID);
+  if (process.env.HEADLESS_STOREFRONT_URL) {
+    expect(await page.context().cookies()).toEqual(expect.arrayContaining([expect.objectContaining({ name: '__Host-1ecomm-cart', secure: true, httpOnly: true, path: '/', sameSite: 'Lax' })]));
+  }
   await expect(page.getByText("Cart (1)")).toBeVisible();
   const [changed] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith(`/carts/current/items/${itemId}`) && response.request().method() === 'PATCH'),
