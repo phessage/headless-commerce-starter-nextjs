@@ -9,7 +9,7 @@ This Next.js App Router starter uses 1Ecomm's managed commerce backend. The brow
 1. Install Node.js 20 or newer.
 2. Copy `.env.example` to `.env` and set `HEADLESS_STORE_ID` to your provisioned 1Ecomm store ID, or use the `.env` downloaded from the merchant connection dialog. The included store ID is a test fixture, not a merchant deployment identity.
 
-The manually dispatched **Post-deployment order acceptance** workflow allocates an expiring fixture after compatible deployment, injects that runtime into the server proxy, drives the real deployed catalog/cart/checkout/order/lookup APIs, and releases the fixture. During development, integration/wave branches run compilation only; final local tests precede main release. Local merchant setup remains store-ID-only.
+The manually dispatched **Post-deployment order acceptance** workflow allocates an expiring fixture after compatible deployment, injects that runtime into the server proxy, drives the real deployed catalog/cart/checkout/order/lookup APIs for physical and nonshipping carts, and releases each fixture. The physical case requires an eligible delivery method on the configured fixture store. During development, integration/wave branches run compilation only; final local tests precede main release. Local merchant setup remains store-ID-only.
 3. Run:
 
 ```bash
@@ -52,8 +52,8 @@ The package uses `GET /v1/headless/products/:id/variants`. **Deploy the compatib
 
 For maintainers, `npm run pack:customer` archives an allowlist from committed HEAD into `release/`; it never includes working-tree credentials, `.git`, installed dependencies, or CI fixture allocators. `npm run pack:check` installs and builds that exact archive in a temporary customer directory. Commit changes before packaging. These commands require a Git checkout; a customer can build/deploy the supplied archive without Git. CI artifacts remain private; delivery to an authorized merchant is still an operator step, not a public download service.
 
-## Shopper cart review (integration source)
+## Shopper cart review
 
 The cart panel restores the current cookie-backed cart, lists server-priced lines and totals, and supports quantity changes and removal through the existing cart endpoints. Cart edits clear checkout preparation so delivery/payment choices are checked again. An unconfirmed item update blocks further changes until the shopper refreshes the cart; mutations are not automatically retried. An empty cart cannot proceed to checkout. Initial cart loading and in-flight changes block conflicting add/payment actions.
 
-This source has compilation evidence only. The final acceptance SSOT tracks real persisted cart, quantity, removal, refresh and checkout validation before release.
+The SaaS final acceptance SSOT records passing local and deployed API browser evidence for cart persistence, quantity changes, removal, refresh and non-hosted checkout. Provider payment qualification and deployment on a merchant-owned HTTPS host remain separate acceptance gates.

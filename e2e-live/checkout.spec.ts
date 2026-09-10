@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
-test("places and renders a real non-hosted order through the server proxy", async ({
+test("places and renders the allocated fulfillment order through the server proxy", async ({
   page,
 }) => {
   const productId = process.env.HEADLESS_PRODUCT_ID;
+  const requiresShipping = process.env.HEADLESS_REQUIRE_SHIPPING === "true";
   if (!productId || !process.env.HEADLESS_PUBLISHABLE_KEY) throw new Error("Allocated fixture environment is required");
   await page.goto("/");
   const add = page.locator(
@@ -69,12 +70,15 @@ test("places and renders a real non-hosted order through the server proxy", asyn
   const shipping = page.getByLabel("Shipping method"),
     payment = page.getByLabel("Payment method");
   await expect(payment.locator("option")).toHaveCount(2);
-  if (preparation.shippingOptions.length > 0) {
+  if (requiresShipping) {
+    expect(preparation.shippingOptions.length, "The configured fixture store must offer delivery for the physical cart").toBeGreaterThan(0);
     await expect(shipping.locator("option")).toHaveCount(preparation.shippingOptions.length + 1);
     const shippingSelected = page.waitForResponse((r) => r.url().endsWith("/checkout/shipping-method") && r.status() === 200);
     await shipping.selectOption({ index: 1 });
     await shippingSelected;
   } else {
+    expect(preparation.shippingOptions).toEqual([]);
+    expect(Number(preparation.cart.totals.shipping)).toBe(0);
     expect(preparation.missing).not.toContain("shippingMethod");
     await expect(shipping).toHaveCount(0);
   }
@@ -82,7 +86,25 @@ test("places and renders a real non-hosted order through the server proxy", asyn
     (r) => r.url().endsWith("/checkout/payment-method") && r.status() === 200,
   );
   await payment.selectOption({ index: 1 });
-  await paymentSelected;
+  const selected = (await (await paymentSelected).json()).data;
+  await expect(payment).toHaveValue(selected.selectedPaymentMethodId);
+  if (requiresShipping) {
+    expect(selected.selectedShippingMethodId).toBeTruthy();
+    await expect(shipping).toHaveValue(selected.selectedShippingMethodId);
+    const chosenRate = selected.shippingOptions.find((option: { id: string }) => option.id === selected.selectedShippingMethodId);
+    expect(chosenRate).toBeTruthy();
+    expect(Number(selected.cart.totals.shipping)).toBe(Number(chosenRate.amount));
+  }
+  const saved = await page.request.get("/api/headless/v1/headless/carts/current/checkout");
+  expect(saved.status()).toBe(200);
+  const savedPreparation = (await saved.json()).data;
+  expect(savedPreparation.selectedPaymentMethodId).toBe(selected.selectedPaymentMethodId);
+  expect(savedPreparation.selectedShippingMethodId).toBe(selected.selectedShippingMethodId);
+  expect(savedPreparation.cart.totals).toEqual(selected.cart.totals);
+  for (const [label, amount] of [["Shipping", selected.cart.totals.shipping], ["Current total", selected.cart.totals.total]]) {
+    const shown = page.getByRole("region", { name: "Your cart", exact: true }).locator("dt").filter({ hasText: new RegExp(`^${label}$`) }).locator("xpath=following-sibling::dd[1]");
+    await expect(shown).toHaveText(new Intl.NumberFormat("en-US", { style: "currency", currency: selected.cart.currency }).format(Number(amount)));
+  }
   await expect(page.getByText("No preparation gaps")).toBeVisible();
   const placed = page.waitForResponse(
     (r) =>
@@ -95,7 +117,7 @@ test("places and renders a real non-hosted order through the server proxy", asyn
   expect(response.status(), JSON.stringify(body)).toBe(201);
   expect(body.data.requiresPayment).toBe(false);
   expect(body.data.paymentStatus).toBe("pending");
-  console.log(`Next.js live order: ${body.data.orderNumber}`);
+  console.log(`Next.js live ${requiresShipping ? "physical" : "nonshipping"} order: ${body.data.orderNumber}; saved checkout choices and totals matched.`);
   await expect(
     page.getByRole("heading", { name: new RegExp(`Order ${body.data.orderNumber} placed`) }),
   ).toBeVisible();
