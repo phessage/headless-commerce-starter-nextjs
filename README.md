@@ -67,3 +67,7 @@ Checkout preparation exposes pickup locations and a delivery/pickup selector usi
 
 
 Wave 25 integration: checkout preparation returns active country address requirements. The form offers separate billing/shipping addresses and invalidates preparation when edited. These changes are not yet deployed or runtime-qualified.
+
+## Wave 27 integration: pickup order information
+
+The updated guest order contract includes saved pickup location details, current pickup status and its ready timestamp under `fulfillment`. The location is a public snapshot, not arbitrary merchant metadata. Deploy the compatible API before adopting this source. The Next.js client reads the actual order after successful non-hosted placement and preserves that success if the follow-up read fails. Final runtime/browser acceptance is tracked in the SaaS validation SSOT; compilation alone is not deployed qualification.
