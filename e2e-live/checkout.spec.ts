@@ -3,6 +3,9 @@ test("places and renders the allocated fulfillment order through the server prox
   page,
 }) => {
   const productId = process.env.HEADLESS_PRODUCT_ID;
+  const mixedCart = process.env.HEADLESS_MIXED_CART === "true";
+  const fixtureItems: Array<{productId: string; variantId: string; requiresShipping: boolean}> = JSON.parse(process.env.HEADLESS_FIXTURE_ITEMS ?? "[]");
+  expect(fixtureItems).toHaveLength(mixedCart ? 2 : 1);
   const requiresShipping = process.env.HEADLESS_REQUIRE_SHIPPING === "true";
   if (!productId || !process.env.HEADLESS_PUBLISHABLE_KEY) throw new Error("Allocated fixture environment is required");
   await page.goto("/");
@@ -50,6 +53,19 @@ test("places and renders the allocated fulfillment order through the server prox
   ]);
   expect(readded.status()).toBe(201);
   expect((await readded.json()).data.items[0]).toMatchObject({ variantId: process.env.HEADLESS_VARIANT_ID, quantity: 1 });
+  if (mixedCart) {
+    expect(fixtureItems.map(item => item.requiresShipping)).toEqual([true, false]);
+    const companion = fixtureItems[1];
+    const [mixedAdded] = await Promise.all([
+      page.waitForResponse(r => r.url().endsWith('/carts/current/items') && r.request().method() === 'POST'),
+      page.locator(`button[data-product-id="${companion.productId}"]`).click(),
+    ]);
+    expect(mixedAdded.status()).toBe(201);
+    const mixed = (await mixedAdded.json()).data;
+    expect(mixed.items).toHaveLength(2);
+    expect(mixed.items.map((item: {variantId: string}) => item.variantId).sort()).toEqual(fixtureItems.map(item => item.variantId).sort());
+    await expect(page.getByText('Quantity: 1', { exact: true })).toHaveCount(2);
+  }
   await page.getByLabel("Email", { exact: true }).fill("next-live@example.test");
   await page.getByLabel("First name").fill("Headless");
   await page.getByLabel("Last name").fill("Fixture");
@@ -58,6 +74,7 @@ test("places and renders the allocated fulfillment order through the server prox
   // Country completeness is decided by the real backend catalog, not HTML required flags.
   for (const [country, requiredGaps] of [
     ['ZZ', ['billingAddress.country']],
+    ['US', ['billingAddress.state', 'billingAddress.postalCode']],
     ['CA', ['billingAddress.state', 'billingAddress.postalCode']],
   ] as const) {
     await page.getByLabel('Country code').fill(country);
@@ -133,7 +150,7 @@ test("places and renders the allocated fulfillment order through the server prox
   expect(response.status(), JSON.stringify(body)).toBe(201);
   expect(body.data.requiresPayment).toBe(false);
   expect(body.data.paymentStatus).toBe("pending");
-  console.log(`Next.js live ${requiresShipping ? "physical" : "nonshipping"} order: ${body.data.orderNumber}; saved checkout choices and totals matched.`);
+  console.log(`Next.js live ${mixedCart ? "mixed" : requiresShipping ? "physical" : "nonshipping"} order: ${body.data.orderNumber}; saved checkout choices and totals matched.`);
   await expect(
     page.getByRole("heading", { name: new RegExp(`Order ${body.data.orderNumber} placed`) }),
   ).toBeVisible();
@@ -143,5 +160,7 @@ test("places and renders the allocated fulfillment order through the server prox
   const reopened = page.waitForResponse((r) => r.url().endsWith("/v1/headless/orders/lookup") && r.request().method() === "POST");
   await page.getByRole("button", { name: "Check order status" }).click();
   const lookup = await reopened; expect(lookup.status()).toBe(201);
+  const reopenedOrder = (await lookup.json()).data;
+  expect(reopenedOrder.items).toHaveLength(mixedCart ? 2 : 1);
   await expect(page.getByRole("heading", { name: `Order ${body.data.orderNumber}` })).toBeVisible();
 });

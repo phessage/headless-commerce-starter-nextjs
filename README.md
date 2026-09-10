@@ -9,7 +9,7 @@ This Next.js App Router starter uses 1Ecomm's managed commerce backend. The brow
 1. Install Node.js 20 or newer.
 2. Copy `.env.example` to `.env` and set `HEADLESS_STORE_ID` to your provisioned 1Ecomm store ID, or use the `.env` downloaded from the merchant connection dialog. The included store ID is a test fixture, not a merchant deployment identity.
 
-The manually dispatched **Post-deployment order acceptance** workflow allocates an expiring fixture after compatible deployment, injects that runtime into the server proxy, drives the real deployed catalog/cart/checkout/order/lookup APIs for physical and nonshipping carts, and releases each fixture. The physical case requires an eligible delivery method on the configured fixture store. During development, integration/wave branches run compilation only; final local tests precede main release. Local merchant setup remains store-ID-only.
+The manually dispatched **Post-deployment order acceptance** workflow allocates an expiring fixture after compatible deployment, injects that runtime into the server proxy, drives the real deployed catalog/cart/checkout/order/lookup APIs for physical, nonshipping and mixed carts, and releases each fixture. The physical case requires an eligible delivery method on the configured fixture store. During development, integration/wave branches run compilation only; final local tests precede main release. Local merchant setup remains store-ID-only.
 3. Run:
 
 ```bash
