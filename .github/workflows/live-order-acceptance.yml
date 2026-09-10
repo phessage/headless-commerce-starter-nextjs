@@ -38,14 +38,25 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Allocate isolated deployed fixture
-        env: {HEADLESS_E2E_ALLOCATOR_TOKEN: '${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}'}
+        env:
+          {
+            HEADLESS_E2E_ALLOCATOR_TOKEN: "${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}",
+          }
         run: bash .github/scripts/headless-fixture.sh allocate
       - name: Run deployed browser order journey
         run: npm run test:e2e:live
       - name: Release isolated deployed fixture
         if: always()
-        env: {HEADLESS_E2E_ALLOCATOR_TOKEN: '${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}'}
+        env:
+          {
+            HEADLESS_E2E_ALLOCATOR_TOKEN: "${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}",
+          }
         run: bash .github/scripts/headless-fixture.sh release
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: playwright-report-${{ matrix.cart }}, path: "playwright-report/\nplaywright-live-report/", retention-days: 14 }
+        with:
+          {
+            name: "playwright-report-${{ matrix.cart }}",
+            path: "playwright-report/\nplaywright-live-report/",
+            retention-days: 14,
+          }
