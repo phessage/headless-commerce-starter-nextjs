@@ -30,12 +30,25 @@ type Preparation = {
   missing: string[];
 };
 type Order = { orderId: string; orderNumber: string; status: string; paymentStatus: string };
-type OrderStatus = { orderNumber: string; status: string; paymentStatus: string; tracking: Record<string, unknown> | null };
+type PickupLocation = { id: string; name: string; addressLine1?: string; addressLine2?: string; city?: string; state?: string; postalCode?: string; country?: string; phone?: string };
+type OrderStatus = { fulfillment: { mode: "ship" | "pickup"; pickupStatus: string | null; pickupLocation: PickupLocation | null }; orderNumber: string; status: string; paymentStatus: string; tracking: Record<string, unknown> | null };
 const cartHeaders = (token?: string, json = false) => ({
   ...(token ? { "x-cart-token": token } : {}),
   ...(json ? { "content-type": "application/json" } : {}),
 });
+function PickupDetails({ order }: { order: OrderStatus }) {
+  if (order.fulfillment.mode !== 'pickup') return null;
+  const location = order.fulfillment.pickupLocation;
+  const status = order.fulfillment.pickupStatus;
+  return <section aria-label="Pickup details">
+    <h4>Store pickup</h4>
+    <p>Pickup status: {status?.replaceAll('_', ' ') || 'Not available'}</p>
+    {location ? <><p>{location.name}</p><address>{[location.addressLine1, location.addressLine2, location.city, location.state, location.postalCode, location.country].filter(Boolean).join(', ')}</address>{location.phone && <p>{location.phone}</p>}</> : <p>Contact the merchant for the pickup location.</p>}
+    {(status === 'pending' || status === 'awaiting_pickup') && <p>Wait until your order is ready for pickup before visiting.</p>}
+  </section>;
+}
 export function Storefront() {
+  const checkoutEmail = useRef('');
   const addBusy = useRef(false);
   const [adding, setAdding] = useState(false);
   const [countries, setCountries] = useState<CheckoutCountry[]>([]);
@@ -194,6 +207,7 @@ export function Storefront() {
     if (addBusy.current || paymentBusy.current || cartLoading || cartUnavailable) return;
     setError("");
     const f = new FormData(event.currentTarget);
+    checkoutEmail.current = String(f.get("email") || "");
     addBusy.current = true; setAdding(true); setPreparation(undefined);
     try {
     const address = {
@@ -315,15 +329,20 @@ export function Storefront() {
       window.location.assign(destination.toString());
     } else {
       setStatus('Order placed without hosted payment');
+      try { await readOrderStatus(result.orderNumber, checkoutEmail.current); }
+      catch { setStatus('Order placed. Use Find your order to load its latest fulfillment details.'); }
     }
     } finally { paymentBusy.current = false; setPaying(false); }
+  }
+  async function readOrderStatus(orderNumber: string, email: string) {
+    const response = await fetch("/api/headless/v1/headless/orders/lookup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderNumber, email }) });
+    if (!response.ok) throw new Error("We could not find an order with those details");
+    setOrderStatus((await response.json()).data);
   }
   async function lookupOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setOrderStatus(undefined);
     const data = new FormData(event.currentTarget);
-    const response = await fetch("/api/headless/v1/headless/orders/lookup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderNumber: data.get("orderNumber"), email: data.get("orderEmail") }) });
-    if (!response.ok) throw new Error("We could not find an order with those details");
-    setOrderStatus((await response.json()).data);
+    await readOrderStatus(String(data.get("orderNumber")), String(data.get("orderEmail")));
   }
   return (
     <>
@@ -577,6 +596,7 @@ export function Storefront() {
                     <h3>Order {order.orderNumber} placed</h3>
                     <p>Status: {order.status}</p>
                     <p>Payment: {order.paymentStatus}</p>
+                    {orderStatus?.orderNumber === order.orderNumber && <PickupDetails order={orderStatus} />}
                   </section>
                 )}
               </div>
@@ -590,7 +610,7 @@ export function Storefront() {
             <label>Order email<input name="orderEmail" type="email" required /></label>
             <button>Check order status</button>
           </form>
-          {orderStatus && <section aria-label="Order status"><h3>Order {orderStatus.orderNumber}</h3><p>Status: {orderStatus.status}</p><p>Payment: {orderStatus.paymentStatus}</p><p>{orderStatus.tracking ? "Tracking is available" : "Tracking is not available yet"}</p></section>}
+          {orderStatus && <section aria-label="Order status"><h3>Order {orderStatus.orderNumber}</h3><p>Status: {orderStatus.status}</p><p>Payment: {orderStatus.paymentStatus}</p><PickupDetails order={orderStatus} /><p>{orderStatus.tracking ? "Tracking is available" : "Tracking is not available yet"}</p></section>}
         </section>
       </main>
     </>
