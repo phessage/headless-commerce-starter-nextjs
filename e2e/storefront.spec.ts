@@ -95,6 +95,8 @@ test('keeps server-selected delivery and payment visible after selection', async
   await page.getByLabel('Last name').fill('Shopper');
   await page.getByLabel('Address', { exact: true }).fill('1 Test Way');
   await page.getByLabel('City', { exact: true }).fill('Vancouver');
+  await page.getByLabel('State', { exact: true }).fill('BC');
+  await page.getByLabel('Postal code', { exact: true }).fill('V6B 1A1');
   await page.getByRole('button', { name: 'Load delivery and payment options' }).click();
   await page.getByLabel('Shipping method').selectOption('shipping');
   await expect(page.getByLabel('Shipping method')).toHaveValue('shipping');
@@ -102,4 +104,37 @@ test('keeps server-selected delivery and payment visible after selection', async
   await expect(page.getByLabel('Payment method')).toHaveValue('bank');
   await expect(page.getByLabel('Shipping method')).toHaveValue('shipping');
   await expect(page.getByTestId('checkout-submit')).toBeEnabled();
+});
+
+
+test('uses country rules, persists separate addresses and invalidates prepared checkout after edits', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Add Trail Pack 24L to cart' }).click();
+  await expect(page.getByLabel('State', { exact: true })).toHaveAttribute('required', '');
+  for (const [label, value] of Object.entries({ Email: 'buyer@example.com', 'First name': 'Ada', 'Last name': 'Buyer', Address: '1 Billing', City: 'Hong Kong', 'Country code': 'HK' })) await page.getByLabel(label, { exact: true }).fill(value);
+  await expect(page.getByLabel('State', { exact: true })).not.toHaveAttribute('required');
+  await page.getByRole('checkbox', { name: 'Ship to billing address' }).uncheck();
+  for (const [label, value] of Object.entries({ 'Shipping first name': 'Grace', 'Shipping last name': 'Buyer', 'Shipping address': '2 Shipping', 'Shipping city': 'Vancouver', 'Shipping state': 'BC', 'Shipping postal code': 'V6B 1A1' })) await page.getByLabel(label, { exact: true }).fill(value);
+  const prepared = page.waitForResponse(r => r.url().endsWith('/checkout') && r.request().method() === 'PATCH');
+  await page.getByRole('button', { name: 'Load delivery and payment options' }).click();
+  const data = (await (await prepared).json()).data;
+  expect(data.cart.billingAddress.country).toBe('HK'); expect(data.cart.shippingAddress.country).toBe('CA'); expect(data.cart.shippingAddress.firstName).toBe('Grace');
+  await expect(page.getByLabel('Payment method')).toBeVisible();
+  await page.getByLabel('Address', { exact: true }).fill('3 Updated');
+  await expect(page.getByLabel('Payment method')).toHaveCount(0);
+  await expect(page.getByTestId('checkout-submit')).toHaveCount(0);
+});
+
+test('persists pickup then delivery and renders eligible location information', async ({ page }) => {
+  await page.goto('/'); await page.getByRole('button', { name: 'Add Trail Pack 24L to cart' }).click();
+  for (const [label, value] of Object.entries({ Email: 'buyer@example.com', 'First name': 'Ada', 'Last name': 'Buyer', Address: '1 Main', City: 'Vancouver', State: 'BC', 'Postal code': 'V6B 1A1' })) await page.getByLabel(label, { exact: true }).fill(value);
+  await page.getByRole('button', { name: 'Load delivery and payment options' }).click();
+  await expect(page.getByRole('option', { name: /Sold out pickup/ })).toHaveAttribute('disabled', '');
+  const selected = page.waitForResponse(r => r.url().endsWith('/checkout') && r.request().method() === 'PATCH');
+  await page.getByLabel('Delivery or pickup').selectOption('20000000-0000-4000-8000-000000000001');
+  expect((await (await selected).json()).data.fulfillment.mode).toBe('pickup');
+  await expect(page.getByText('1 Main Street', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Shipping method')).toHaveCount(0);
+  await page.getByLabel('Delivery or pickup').selectOption('ship');
+  await expect(page.getByLabel('Shipping method')).toBeVisible();
 });
