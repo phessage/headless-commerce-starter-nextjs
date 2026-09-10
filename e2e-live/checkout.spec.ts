@@ -6,6 +6,7 @@ test("places and renders the allocated fulfillment order through the server prox
   const mixedCart = process.env.HEADLESS_MIXED_CART === "true";
   const fixtureItems: Array<{productId: string; variantId: string; requiresShipping: boolean}> = JSON.parse(process.env.HEADLESS_FIXTURE_ITEMS ?? "[]");
   expect(fixtureItems).toHaveLength(mixedCart ? 2 : 1);
+  const pickup = process.env.HEADLESS_PICKUP === "true";
   const requiresShipping = process.env.HEADLESS_REQUIRE_SHIPPING === "true";
   if (!productId || !process.env.HEADLESS_PUBLISHABLE_KEY) throw new Error("Allocated fixture environment is required");
   await page.goto("/");
@@ -142,11 +143,20 @@ test("places and renders the allocated fulfillment order through the server prox
   await page
     .getByRole("button", { name: "Load delivery and payment options" })
     .click();
-  const preparation = (await (await prepared).json()).data;
+  let preparation = (await (await prepared).json()).data;
+  if (pickup) {
+    const locationId = process.env.HEADLESS_PICKUP_LOCATION_ID;
+    expect(locationId).toBeTruthy();
+    expect(preparation.pickupLocations).toEqual(expect.arrayContaining([expect.objectContaining({ id: locationId, available: true })]));
+    const chosen = page.waitForResponse(r => r.url().endsWith('/checkout') && r.request().method() === 'PATCH');
+    await page.getByLabel('Delivery or pickup').selectOption(locationId!);
+    const response = await chosen; expect(response.status()).toBe(200); preparation = (await response.json()).data;
+    expect(preparation.fulfillment).toMatchObject({ mode: 'pickup', pickupLocationId: locationId });
+  }
   const shipping = page.getByLabel("Shipping method"),
     payment = page.getByLabel("Payment method");
   await expect(payment.locator("option")).toHaveCount(2);
-  if (requiresShipping) {
+  if (requiresShipping && !pickup) {
     expect(preparation.shippingOptions.length, "The configured fixture store must offer delivery for the physical cart").toBeGreaterThan(0);
     await expect(shipping.locator("option")).toHaveCount(preparation.shippingOptions.length + 1);
     const shippingSelected = page.waitForResponse((r) => r.url().endsWith("/checkout/shipping-method") && r.status() === 200);
@@ -164,7 +174,7 @@ test("places and renders the allocated fulfillment order through the server prox
   await payment.selectOption({ index: 1 });
   const selected = (await (await paymentSelected).json()).data;
   await expect(payment).toHaveValue(selected.selectedPaymentMethodId);
-  if (requiresShipping) {
+  if (requiresShipping && !pickup) {
     expect(selected.selectedShippingMethodId).toBeTruthy();
     await expect(shipping).toHaveValue(selected.selectedShippingMethodId);
     const chosenRate = selected.shippingOptions.find((option: { id: string }) => option.id === selected.selectedShippingMethodId);
@@ -206,4 +216,12 @@ test("places and renders the allocated fulfillment order through the server prox
   const reopenedOrder = (await lookup.json()).data;
   expect(reopenedOrder.items).toHaveLength(mixedCart ? 2 : 1);
   await expect(page.getByRole("heading", { name: `Order ${body.data.orderNumber}` })).toBeVisible();
+  if (pickup) {
+    expect(reopenedOrder.fulfillment).toMatchObject({ mode: 'pickup', pickupLocationId: process.env.HEADLESS_PICKUP_LOCATION_ID, pickupStatus: 'pending', pickupLocation: { id: process.env.HEADLESS_PICKUP_LOCATION_ID, addressLine1: '1 Fixture Way' } });
+    expect(Number(reopenedOrder.shippingAmount)).toBe(0); expect(reopenedOrder.shippingAddress).toBeNull();
+    const details = page.getByRole('region', { name: 'Order status', exact: true }).getByRole('region', { name: 'Pickup details', exact: true });
+    await expect(details.getByText(reopenedOrder.fulfillment.pickupLocation.name, { exact: true })).toBeVisible();
+    await expect(details.getByText('Wait until your order is ready for pickup before visiting.', { exact: true })).toBeVisible();
+    console.log(`Pickup order ${reopenedOrder.id}; location ${reopenedOrder.fulfillment.pickupLocationId}; lease ${process.env.HEADLESS_LEASE_ID}`);
+  }
 });

@@ -22,7 +22,12 @@ jobs:
           - cart: mixed
             requires-shipping: true
             mixed-cart: true
+          - cart: pickup-mixed
+            requires-shipping: true
+            mixed-cart: true
+            pickup: true
     env:
+      HEADLESS_PICKUP: ${{ matrix.pickup || false }}
       HEADLESS_REQUIRE_SHIPPING: ${{ matrix.requires-shipping }}
       HEADLESS_MIXED_CART: ${{ matrix.mixed-cart }}
     timeout-minutes: 15
