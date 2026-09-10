@@ -100,22 +100,36 @@ test("places and renders the allocated fulfillment order through the server prox
   await page.getByLabel("Last name").fill("Fixture");
   await page.getByLabel("Address").fill("1 Test Way");
   await page.getByLabel("City").fill("Vancouver");
-  // Country completeness is decided by the real backend catalog, not HTML required flags.
+  // Country guidance and backend validation must agree; verify both boundaries.
   for (const [country, requiredGaps] of [
     ['ZZ', ['billingAddress.country']],
     ['US', ['billingAddress.state', 'billingAddress.postalCode']],
     ['CA', ['billingAddress.state', 'billingAddress.postalCode']],
   ] as const) {
     await page.getByLabel('Country code').fill(country);
-    const [incomplete] = await Promise.all([
-      page.waitForResponse(r => r.url().endsWith('/carts/current/checkout') && r.request().method() === 'PATCH'),
-      page.getByRole('button', { name: 'Load delivery and payment options' }).click(),
-    ]);
-    expect(incomplete.status()).toBe(200);
-    const gaps = (await incomplete.json()).data;
-    expect(gaps.ready).toBe(false);
-    expect(gaps.missing).toEqual(expect.arrayContaining([...requiredGaps]));
-    for (const gap of requiredGaps) await expect(page.getByText(/Preparation gaps:/)).toContainText(gap);
+    if (country === 'ZZ') {
+      const [incomplete] = await Promise.all([
+        page.waitForResponse(r => r.url().endsWith('/checkout') && r.request().method() === 'PATCH'),
+        page.getByRole('button', { name: 'Load delivery and payment options' }).click(),
+      ]);
+      expect(incomplete.status()).toBe(200);
+      const gaps = (await incomplete.json()).data;
+      expect(gaps.ready).toBe(false); expect(gaps.missing).toEqual(expect.arrayContaining([...requiredGaps]));
+      await expect(page.getByText(/Preparation gaps:/)).toContainText('billingAddress.country');
+    } else {
+      // Native UI prevention and real API rejection are independent assertions.
+      // Do not disable form validation or manufacture responses.
+      await expect(page.getByLabel('State', { exact: true })).toHaveAttribute('required', '');
+      await expect(page.getByLabel('Postal code', { exact: true })).toHaveAttribute('required', '');
+      expect(await page.getByLabel('State', { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valueMissing)).toBe(true);
+      const incomplete = await page.request.patch('/api/headless/v1/headless/carts/current/checkout', {
+        headers: { origin: new URL(page.url()).origin },
+        data: { billingAddress: { country, state: '', postalCode: '' }, shippingAddress: { sameAsBilling: true } },
+      });
+      expect(incomplete.status()).toBe(200);
+      const gaps = (await incomplete.json()).data;
+      expect(gaps.ready).toBe(false); expect(gaps.missing).toEqual(expect.arrayContaining([...requiredGaps]));
+    }
   }
   await page.getByLabel("State").fill("BC");
   await page.getByLabel("Postal code").fill("V6B1A1");
