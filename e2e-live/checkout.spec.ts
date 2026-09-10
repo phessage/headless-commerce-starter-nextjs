@@ -50,6 +50,20 @@ test("places and renders the allocated fulfillment order through the server prox
   ]);
   expect(readded.status()).toBe(201);
   expect((await readded.json()).data.items[0]).toMatchObject({ variantId: process.env.HEADLESS_VARIANT_ID, quantity: 1 });
+  if (process.env.HEADLESS_CART_MODE === "mixed") {
+    const secondProduct = process.env.HEADLESS_SECOND_PRODUCT_ID;
+    const secondVariant = process.env.HEADLESS_SECOND_VARIANT_ID;
+    expect(secondProduct).toBeTruthy(); expect(secondVariant).toBeTruthy();
+    const [mixed] = await Promise.all([
+      page.waitForResponse(r => r.url().endsWith('/carts/current/items') && r.request().method() === 'POST'),
+      page.locator(`button[data-product-id="${secondProduct}"]`).click(),
+    ]);
+    expect(mixed.status()).toBe(201);
+    const items = (await mixed.json()).data.items;
+    expect(items).toHaveLength(2);
+    expect(items.map((item: { variantId: string }) => item.variantId)).toEqual(expect.arrayContaining([process.env.HEADLESS_VARIANT_ID, secondVariant]));
+    await expect(page.getByText('Cart (2)', { exact: true })).toBeVisible();
+  }
   await page.getByLabel("Email", { exact: true }).fill("next-live@example.test");
   await page.getByLabel("First name").fill("Headless");
   await page.getByLabel("Last name").fill("Fixture");
@@ -117,7 +131,7 @@ test("places and renders the allocated fulfillment order through the server prox
   expect(response.status(), JSON.stringify(body)).toBe(201);
   expect(body.data.requiresPayment).toBe(false);
   expect(body.data.paymentStatus).toBe("pending");
-  console.log(`Next.js live ${requiresShipping ? "physical" : "nonshipping"} order: ${body.data.orderNumber}; saved checkout choices and totals matched.`);
+  console.log(`Next.js live ${process.env.HEADLESS_CART_MODE ?? "nonshipping"} order: ${body.data.orderNumber}; saved checkout choices and totals matched.`);
   await expect(
     page.getByRole("heading", { name: new RegExp(`Order ${body.data.orderNumber} placed`) }),
   ).toBeVisible();
