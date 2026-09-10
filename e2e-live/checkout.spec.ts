@@ -55,6 +55,22 @@ test("places and renders the allocated fulfillment order through the server prox
   await page.getByLabel("Last name").fill("Fixture");
   await page.getByLabel("Address").fill("1 Test Way");
   await page.getByLabel("City").fill("Vancouver");
+  // Country completeness is decided by the real backend catalog, not HTML required flags.
+  for (const [country, requiredGaps] of [
+    ['ZZ', ['billingAddress.country']],
+    ['CA', ['billingAddress.state', 'billingAddress.postalCode']],
+  ] as const) {
+    await page.getByLabel('Country code').fill(country);
+    const [incomplete] = await Promise.all([
+      page.waitForResponse(r => r.url().endsWith('/carts/current/checkout') && r.request().method() === 'PATCH'),
+      page.getByRole('button', { name: 'Load delivery and payment options' }).click(),
+    ]);
+    expect(incomplete.status()).toBe(200);
+    const gaps = (await incomplete.json()).data;
+    expect(gaps.ready).toBe(false);
+    expect(gaps.missing).toEqual(expect.arrayContaining([...requiredGaps]));
+    for (const gap of requiredGaps) await expect(page.getByText(/Preparation gaps:/)).toContainText(gap);
+  }
   await page.getByLabel("State").fill("BC");
   await page.getByLabel("Postal code").fill("V6B1A1");
   const prepared = page.waitForResponse(
