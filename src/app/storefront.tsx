@@ -17,6 +17,8 @@ type Cart = {
 };
 const money = (amount: string, currency: string) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(amount));
 type Preparation = {
+  fulfillment: { mode: 'ship' | 'pickup'; pickupLocationId: string | null };
+  pickupLocations: Array<{ id: string; name: string; available: boolean; addressLine1?: string; city?: string; state?: string; postalCode?: string; country?: string }>;
   cart: Cart;
   shippingOptions: Option[];
   paymentMethods: Option[];
@@ -205,6 +207,22 @@ export function Storefront() {
     acceptCart(prepared.cart);
     setStatus("Checkout prepared");
     } finally { addBusy.current = false; setAdding(false); }
+  }
+  async function selectFulfillment(value: string) {
+    if (!value || addBusy.current || paymentBusy.current || cartLoading || cartUnavailable) return;
+    addBusy.current = true; setAdding(true); setError('');
+    setPreparation(current => current ? { ...current, ready: false } : current);
+    try {
+      const response = await fetch('/api/headless/v1/headless/carts/current/checkout', {
+        method: 'PATCH', headers: cartHeaders(cartToken, true),
+        body: JSON.stringify({ fulfillment: value === 'ship' ? { mode: 'ship' } : { mode: 'pickup', pickupLocationId: value } }),
+      });
+      if (!response.ok) throw new Error('Fulfillment could not be selected. Refresh your cart and check availability.');
+      const prepared: Preparation = (await response.json()).data;
+      setPreparation(prepared); acceptCart(prepared.cart);
+      setStatus(prepared.fulfillment.mode === 'pickup' ? 'Pickup selected' : 'Delivery selected');
+    } catch (failure) { setCartUnavailable(true); throw failure; }
+    finally { addBusy.current = false; setAdding(false); }
   }
   async function select(
     kind: "shipping-method" | "payment-method",
@@ -434,6 +452,20 @@ export function Storefront() {
             </form>
             {preparation && (
               <div className="options">
+                {(preparation.pickupLocations?.length > 0 || preparation.fulfillment?.mode === 'pickup') && <label>
+                  Delivery or pickup
+                  <select aria-label="Delivery or pickup" disabled={adding || paying}
+                    value={preparation.fulfillment.mode === 'pickup' ? preparation.fulfillment.pickupLocationId ?? '' : 'ship'}
+                    onChange={event => selectFulfillment(event.target.value).catch(failure => setError(failure.message))}>
+                    <option value="ship">Delivery</option>
+                    {preparation.fulfillment.mode === 'pickup' && !preparation.pickupLocations.some(location => location.id === preparation.fulfillment.pickupLocationId) && <option value={preparation.fulfillment.pickupLocationId ?? ''} disabled>Previous pickup location unavailable</option>}
+                    {preparation.pickupLocations.map(location => <option key={location.id} value={location.id} disabled={!location.available}>
+                      {location.name}{location.available ? '' : ' — unavailable for this cart'}
+                    </option>)}
+                  </select>
+                  {preparation.pickupLocations.filter(location => location.id === preparation.fulfillment.pickupLocationId).map(location =>
+                    <span key={location.id}>{[location.addressLine1, location.city, location.state, location.postalCode, location.country].filter(Boolean).join(', ')}</span>)}
+                </label>}
                 {(preparation.shippingOptions.length > 0 || preparation.missing.includes("shippingMethod")) && <label>
                   Shipping method
                   <select
