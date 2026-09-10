@@ -16,7 +16,9 @@ type Cart = {
   totals: { subtotal: string; tax: string; taxIsEstimate: boolean; shipping: string; discount: string; total: string };
 };
 const money = (amount: string, currency: string) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(amount));
+type CheckoutCountry = { code: string; name: string; stateRequired: boolean; postalCodeRequired: boolean };
 type Preparation = {
+  countries: CheckoutCountry[];
   fulfillment: { mode: 'ship' | 'pickup'; pickupLocationId: string | null };
   pickupLocations: Array<{ id: string; name: string; available: boolean; addressLine1?: string; city?: string; state?: string; postalCode?: string; country?: string }>;
   cart: Cart;
@@ -36,6 +38,13 @@ const cartHeaders = (token?: string, json = false) => ({
 export function Storefront() {
   const addBusy = useRef(false);
   const [adding, setAdding] = useState(false);
+  const [countries, setCountries] = useState<CheckoutCountry[]>([]);
+  const [billingCountry, setBillingCountry] = useState('CA');
+  const [shippingCountry, setShippingCountry] = useState('CA');
+  const [sameAsBilling, setSameAsBilling] = useState(true);
+  const [fulfillmentMode, setFulfillmentMode] = useState<'ship' | 'pickup'>('ship');
+  const billingRules = countries.find(country => country.code === billingCountry);
+  const shippingRules = countries.find(country => country.code === shippingCountry);
   const [cart, setCart] = useState<Cart>();
   const [cartLoading, setCartLoading] = useState(true);
   const [cartUnavailable, setCartUnavailable] = useState(false);
@@ -69,6 +78,15 @@ export function Storefront() {
       setStatus(`Payment is not confirmed by this return page. ${number ? `Use order ${number} and your checkout email below to check its status.` : 'Check your order status below.'}`);
     }
   }, []);
+  useEffect(() => {
+    if (!cartId) { setCountries([]); return; }
+    const controller = new AbortController();
+    fetch('/api/headless/v1/headless/carts/current/checkout', { signal: controller.signal })
+      .then(async response => { if (response.ok) { const data: Preparation = (await response.json()).data; setCountries(data.countries); setFulfillmentMode(data.fulfillment.mode); } })
+      .catch(() => { /* Checkout submission remains authoritative if guidance is unavailable. */ });
+    return () => controller.abort();
+  }, [cartId]);
+  function invalidateAddress() { setPreparation(undefined); }
   const shown = useMemo(
     () =>
       products.filter((p) =>
@@ -198,12 +216,18 @@ export function Storefront() {
           email: address.email,
         },
         billingAddress: address,
-        shippingAddress: { sameAsBilling: true },
+        shippingAddress: sameAsBilling ? { sameAsBilling: true } : {
+          sameAsBilling: false, firstName: f.get('shippingFirstName'), lastName: f.get('shippingLastName'),
+          address1: f.get('shippingAddress1'), city: f.get('shippingCity'), state: f.get('shippingState'),
+          postalCode: f.get('shippingPostalCode'), country: shippingCountry,
+        },
       }),
     });
     if (!r.ok) throw new Error("Checkout preparation failed");
     const prepared = (await r.json()).data;
     setPreparation(prepared);
+    setCountries(prepared.countries);
+    setFulfillmentMode(prepared.fulfillment.mode);
     acceptCart(prepared.cart);
     setStatus("Checkout prepared");
     } finally { addBusy.current = false; setAdding(false); }
@@ -219,7 +243,7 @@ export function Storefront() {
       });
       if (!response.ok) throw new Error('Fulfillment could not be selected. Refresh your cart and check availability.');
       const prepared: Preparation = (await response.json()).data;
-      setPreparation(prepared); acceptCart(prepared.cart);
+      setPreparation(prepared); setFulfillmentMode(prepared.fulfillment.mode); acceptCart(prepared.cart);
       setStatus(prepared.fulfillment.mode === 'pickup' ? 'Pickup selected' : 'Delivery selected');
     } catch (failure) { setCartUnavailable(true); throw failure; }
     finally { addBusy.current = false; setAdding(false); }
@@ -242,6 +266,8 @@ export function Storefront() {
     if (!r.ok) throw new Error(`${kind} selection failed`);
     const prepared = (await r.json()).data;
     setPreparation(prepared);
+    setCountries(prepared.countries);
+    setFulfillmentMode(prepared.fulfillment.mode);
     acceptCart(prepared.cart);
     setStatus(`${kind} selected`);
     } finally { addBusy.current = false; setAdding(false); }
@@ -399,8 +425,10 @@ export function Storefront() {
           <section className="checkout" aria-label="Checkout preparation">
             <h2>Prepare checkout</h2>
             <form
+              onChange={invalidateAddress}
               onSubmit={(e) => prepare(e).catch((x) => setError(x.message))}
             >
+              <fieldset disabled={adding || paying}>
               <input
                 name="email"
                 type="email"
@@ -435,20 +463,38 @@ export function Storefront() {
               <input
                 name="state"
                 aria-label="State"
-                placeholder="State/province, when required"
+                placeholder={billingRules?.stateRequired ? "State/province required" : "State/province, optional"}
+                required={billingRules?.stateRequired}
               />
               <input
                 name="postalCode"
                 aria-label="Postal code"
-                placeholder="Postal code, when required"
+                placeholder={billingRules?.postalCodeRequired ? "Postal code required" : "Postal code, optional"}
+                required={billingRules?.postalCodeRequired}
               />
               <input
                 name="countryCode"
                 aria-label="Country code"
-                defaultValue="CA"
+                value={billingCountry}
+                onChange={event => setBillingCountry(event.target.value.toUpperCase())}
+                list="checkout-countries"
                 required
               />
+              <datalist id="checkout-countries">{countries.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}</datalist>
+              <p>Country suggestions describe address requirements. Delivery availability is checked for your cart.</p>
+              <label><input type="checkbox" checked={sameAsBilling} onChange={event => setSameAsBilling(event.target.checked)} />Ship to billing address</label>
+              {!sameAsBilling && <fieldset disabled={adding || paying}>
+                <legend>Shipping address</legend>
+                <input name="shippingFirstName" aria-label="Shipping first name" required={fulfillmentMode === 'ship'} />
+                <input name="shippingLastName" aria-label="Shipping last name" required={fulfillmentMode === 'ship'} />
+                <input name="shippingAddress1" aria-label="Shipping address" required={fulfillmentMode === 'ship'} />
+                <input name="shippingCity" aria-label="Shipping city" required={fulfillmentMode === 'ship'} />
+                <input name="shippingState" aria-label="Shipping state" required={fulfillmentMode === 'ship' && shippingRules?.stateRequired} />
+                <input name="shippingPostalCode" aria-label="Shipping postal code" required={fulfillmentMode === 'ship' && shippingRules?.postalCodeRequired} />
+                <input name="shippingCountryCode" aria-label="Shipping country code" list="checkout-countries" value={shippingCountry} onChange={event => setShippingCountry(event.target.value.toUpperCase())} required />
+              </fieldset>}
               <button disabled={adding || paying || cartLoading}>Load delivery and payment options</button>
+              </fieldset>
             </form>
             {preparation && (
               <div className="options">
