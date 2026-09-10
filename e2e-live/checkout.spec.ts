@@ -40,6 +40,35 @@ test("places and renders the allocated fulfillment order through the server prox
   await page.reload();
   expect((await (await restored).json()).data.items[0]).toMatchObject({ id: itemId, quantity: 2 });
   await expect(page.getByText('Quantity: 2', { exact: true })).toBeVisible();
+  // Execute the real mutation, then lose only its browser response. No response body is fabricated.
+  let committedQuantity: number | undefined;
+  let mutationRequests = 0;
+  const countMutation = (request: import('@playwright/test').Request) => {
+    if (request.method() === 'PATCH' && request.url().endsWith(`/carts/current/items/${itemId}`)) mutationRequests++;
+  };
+  page.on('request', countMutation);
+  await page.route(`**/carts/current/items/${itemId}`, async route => {
+    const upstream = await route.fetch({ maxRetries: 0, maxRedirects: 0 });
+    expect(upstream.status()).toBe(200);
+    committedQuantity = (await upstream.json()).data.items[0].quantity;
+    await route.abort('failed');
+  }, { times: 1 });
+  await page.getByRole('button', { name: /^Increase quantity of/ }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Cart state is uncertain.' })).toBeVisible();
+  expect(committedQuantity).toBe(3);
+  await expect(page.getByRole('button', { name: /^Increase quantity of/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Remove / })).toBeDisabled();
+  await expect(add).toBeDisabled();
+  const [recovered] = await Promise.all([
+    page.waitForResponse(r => r.url().endsWith('/carts/current') && r.request().method() === 'GET'),
+    page.getByRole('button', { name: 'Refresh cart', exact: true }).click(),
+  ]);
+  expect(recovered.status()).toBe(200);
+  expect((await recovered.json()).data.items[0]).toMatchObject({ id: itemId, quantity: 3 });
+  await expect(page.getByText('Quantity: 3', { exact: true })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Cart state is uncertain.' })).toHaveCount(0);
+  expect(mutationRequests).toBe(1);
+  page.off('request', countMutation);
   const [removed] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith(`/carts/current/items/${itemId}`) && response.request().method() === 'DELETE'),
     page.getByRole('button', { name: /^Remove / }).click(),
