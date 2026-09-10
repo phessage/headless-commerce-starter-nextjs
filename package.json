@@ -9,11 +9,12 @@
     "start": "next start",
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config playwright.live.config.ts",
-    "check": "next build && npm run test:host && playwright test",
+    "check": "next build && npm run test:host && npm run test:deployment && playwright test",
     "test:host": "node --test test/host-inspection.test.mjs",
     "host:inspect": "node scripts/inspect-host.mjs",
     "pack:customer": "node scripts/package-customer.mjs",
-    "pack:check": "bash scripts/package-smoke.sh"
+    "pack:check": "bash scripts/package-smoke.sh",
+    "test:deployment": "node --experimental-strip-types --test test/deployment-policy.test.mjs"
   },
   "dependencies": {
     "next": "16.3.4",
