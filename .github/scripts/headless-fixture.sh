@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 api="https://api.1ecomm.com/operations/headless/e2e-fixtures"
 state="${RUNNER_TEMP:-/tmp}/headless-fixture-lease.json"
@@ -10,11 +11,12 @@ if [ "${1:-}" = "allocate" ]; then
   response="$(curl --fail --silent --show-error --retry 2 \
     -H "x-fixture-allocator-token: $token" \
     -H 'content-type: application/json' \
-    --data "$(jq -cn --arg runId "${GITHUB_REPOSITORY:-local}:${GITHUB_RUN_ID:-0}:${GITHUB_RUN_ATTEMPT:-0}" '{runId:$runId,ttlMinutes:45,inventory:20}')" \
+    --data "$(jq -cn --arg runId "${GITHUB_REPOSITORY:-local}:${GITHUB_RUN_ID:-0}:${GITHUB_RUN_ATTEMPT:-0}:${HEADLESS_REQUIRE_SHIPPING:-false}" --argjson requiresShipping "${HEADLESS_REQUIRE_SHIPPING:-false}" '{runId:$runId,ttlMinutes:45,inventory:20,requiresShipping:$requiresShipping}')" \
     "$api/allocate")"
   printf '%s' "$response" > "$state"
   chmod 600 "$state"
   for field in leaseId leaseToken storeId publishableKey productId variantId; do jq -er ".$field | strings | select(length > 0)" "$state" >/dev/null; done
+  jq -e --argjson expected "${HEADLESS_REQUIRE_SHIPPING:-false}" '.requiresShipping == $expected' "$state" >/dev/null
   echo "::add-mask::$(jq -r '.leaseToken' "$state")"
   echo "::add-mask::$(jq -r '.publishableKey' "$state")"
   {

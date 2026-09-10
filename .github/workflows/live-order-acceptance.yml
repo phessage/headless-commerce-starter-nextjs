@@ -8,7 +8,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   live-order:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, docker-services]
+    strategy:
+      fail-fast: false
+      matrix:
+        requires-shipping: [false, true]
+    env:
+      HEADLESS_REQUIRE_SHIPPING: ${{ matrix.requires-shipping }}
     timeout-minutes: 15
     container: mcr.microsoft.com/playwright:v1.62.1-noble
     steps:
