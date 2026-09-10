@@ -59,8 +59,17 @@ createServer(async (req, res) => {
     cart.selectedShippingMethodId = null; cart.selectedPaymentMethodId = null;
     return res.end(JSON.stringify({ data: priceCart(cart), requestId: 'r' }));
   }
-  const needsShipping = cart?.items.some(item => item.requiresShipping !== false);
-  const checkout = () => ({ ...cart, cart, shippingOptions: needsShipping ? [{ id: 'shipping', name: 'Delivery' }] : [], paymentMethods: [
+  if (url.pathname.endsWith('/checkout') && req.method === 'PATCH') {
+    const input = JSON.parse(raw);
+    if (input.fulfillment) cart.fulfillment = input.fulfillment;
+    if (input.billingAddress) cart.billingAddress = input.billingAddress;
+    if (input.shippingAddress) cart.shippingAddress = input.shippingAddress.sameAsBilling ? { ...cart.billingAddress, sameAsBilling: true } : input.shippingAddress;
+  }
+  const needsShipping = cart?.fulfillment?.mode !== 'pickup' && cart?.items.some(item => item.requiresShipping !== false);
+  const checkout = () => ({ ...cart, cart,
+    fulfillment: cart.fulfillment ?? { mode: 'ship', pickupLocationId: null },
+    countries: [{ code: 'CA', name: 'Canada', stateRequired: true, postalCodeRequired: true }, { code: 'HK', name: 'Hong Kong', stateRequired: false, postalCodeRequired: false }],
+    pickupLocations: [{ id: '20000000-0000-4000-8000-000000000001', name: 'Downtown pickup', addressLine1: '1 Main Street', available: true }, { id: '20000000-0000-4000-8000-000000000002', name: 'Sold out pickup', available: false }], shippingOptions: needsShipping ? [{ id: 'shipping', name: 'Delivery' }] : [], paymentMethods: [
     { id: 'card', name: 'Card with merchant provider', capabilities: { requiresHostedCheckout: true, canPlaceOrder: false } },
     { id: 'bank', name: 'Bank transfer', capabilities: { requiresHostedCheckout: false, canPlaceOrder: true } },
   ], ready: Boolean((!needsShipping || cart.selectedShippingMethodId) && cart.selectedPaymentMethodId), missing: [] });

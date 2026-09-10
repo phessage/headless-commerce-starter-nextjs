@@ -9,7 +9,8 @@
     "start": "next start",
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config playwright.live.config.ts",
-    "check": "next build && playwright test",
+    "check": "next build && npm run test:host && playwright test",
+    "test:host": "node --test test/host-inspection.test.mjs",
     "host:inspect": "node scripts/inspect-host.mjs",
     "pack:customer": "node scripts/package-customer.mjs",
     "pack:check": "bash scripts/package-smoke.sh"
