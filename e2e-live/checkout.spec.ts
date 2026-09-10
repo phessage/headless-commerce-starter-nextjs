@@ -98,7 +98,7 @@ test("places and renders the allocated fulfillment order through the server prox
   await page.getByLabel("Email", { exact: true }).fill("next-live@example.test");
   await page.getByLabel("First name").fill("Headless");
   await page.getByLabel("Last name").fill("Fixture");
-  await page.getByLabel("Address").fill("1 Test Way");
+  await page.getByLabel("Address", { exact: true }).fill("1 Test Way");
   await page.getByLabel("City").fill("Vancouver");
   // Country guidance and backend validation must agree; verify both boundaries.
   for (const [country, requiredGaps] of [
