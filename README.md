@@ -64,3 +64,6 @@ When a cart mutation loses its response, Refresh cart reads the persisted result
 ## Wave 24 integration additions
 
 Checkout preparation exposes pickup locations and a delivery/pickup selector using actual location stock. After deployment, run `npm run host:inspect -- https://your-store.example STORE_UUID https://api.1ecomm.com` for read-only runtime identity and catalog diagnosis. It reports checkout as unqualified; complete the real browser/payment journey separately.
+
+
+Wave 25 integration: checkout preparation returns active country address requirements. The form offers separate billing/shipping addresses and invalidates preparation when edited. These changes are not yet deployed or runtime-qualified.
