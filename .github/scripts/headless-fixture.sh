@@ -11,7 +11,7 @@ if [ "${1:-}" = "allocate" ]; then
   response="$(curl --fail --silent --show-error --retry 2 \
     -H "x-fixture-allocator-token: $token" \
     -H 'content-type: application/json' \
-    --data "$(jq -cn --arg runId "${GITHUB_REPOSITORY:-local}:${GITHUB_RUN_ID:-0}:${GITHUB_RUN_ATTEMPT:-0}:${HEADLESS_REQUIRE_SHIPPING:-false}" --argjson requiresShipping "${HEADLESS_REQUIRE_SHIPPING:-false}" '{runId:$runId,ttlMinutes:45,inventory:20,requiresShipping:$requiresShipping}')" \
+    --data "$(jq -cn --arg runId "${GITHUB_REPOSITORY:-local}:${GITHUB_RUN_ID:-0}:${GITHUB_RUN_ATTEMPT:-0}:${HEADLESS_REQUIRE_SHIPPING:-false}:${HEADLESS_MIXED_CART:-false}" --argjson requiresShipping "${HEADLESS_REQUIRE_SHIPPING:-false}" --argjson mixedCart "${HEADLESS_MIXED_CART:-false}" '{runId:$runId,ttlMinutes:45,inventory:20,requiresShipping:$requiresShipping,mixedCart:$mixedCart}' )" \
     "$api/allocate")"
   printf '%s' "$response" > "$state"
   chmod 600 "$state"
@@ -25,6 +25,7 @@ if [ "${1:-}" = "allocate" ]; then
     echo "HEADLESS_STORE_ID=$(jq -r '.storeId' "$state")"
     echo "HEADLESS_PUBLISHABLE_KEY=$(jq -r '.publishableKey' "$state")"
     echo "HEADLESS_PRODUCT_ID=$(jq -r '.productId' "$state")"
+    echo "HEADLESS_FIXTURE_ITEMS=$(jq -c '[.items[] | {productId,variantId,requiresShipping}]' "$state")"
     echo "HEADLESS_VARIANT_ID=$(jq -r '.variantId' "$state")"
     echo "HEADLESS_API_URL=https://api.1ecomm.com"
   } >> "$GITHUB_ENV"

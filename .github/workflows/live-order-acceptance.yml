@@ -12,9 +12,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        requires-shipping: [false, true]
+        include:
+          - cart: nonshipping
+            requires-shipping: false
+            mixed-cart: false
+          - cart: physical
+            requires-shipping: true
+            mixed-cart: false
+          - cart: mixed
+            requires-shipping: true
+            mixed-cart: true
     env:
       HEADLESS_REQUIRE_SHIPPING: ${{ matrix.requires-shipping }}
+      HEADLESS_MIXED_CART: ${{ matrix.mixed-cart }}
     timeout-minutes: 15
     container: mcr.microsoft.com/playwright:v1.62.1-noble
     steps:
@@ -28,14 +38,25 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Allocate isolated deployed fixture
-        env: {HEADLESS_E2E_ALLOCATOR_TOKEN: '${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}'}
+        env:
+          {
+            HEADLESS_E2E_ALLOCATOR_TOKEN: "${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}",
+          }
         run: bash .github/scripts/headless-fixture.sh allocate
       - name: Run deployed browser order journey
         run: npm run test:e2e:live
       - name: Release isolated deployed fixture
         if: always()
-        env: {HEADLESS_E2E_ALLOCATOR_TOKEN: '${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}'}
+        env:
+          {
+            HEADLESS_E2E_ALLOCATOR_TOKEN: "${{ secrets.HEADLESS_E2E_ALLOCATOR_TOKEN }}",
+          }
         run: bash .github/scripts/headless-fixture.sh release
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: playwright-report, path: "playwright-report/\nplaywright-live-report/", retention-days: 14 }
+        with:
+          {
+            name: "playwright-report-${{ matrix.cart }}",
+            path: "playwright-report/\nplaywright-live-report/",
+            retention-days: 14,
+          }
