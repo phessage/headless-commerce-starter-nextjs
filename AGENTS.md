@@ -30,7 +30,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # 1Ecomm AI engineering guide
 
-Read `README.md`, `docs/architecture.md`, `docs/production-readiness.md`, `docs/sandbox.md`, the App Router source, and both Playwright suites before editing. Installed Next.js documentation is the framework authority; `phessage/ecommerce-service/contracts/headless-commerce-v1.openapi.yaml` is the commerce-contract authority.
+Read `README.md`, `docs/architecture.md`, `docs/production-readiness.md`, `docs/sandbox.md`, the App Router source, and both Playwright suites before editing. Installed Next.js documentation is the framework authority; `https://www.1ecomm.com/headless-commerce/openapi.yaml` is the commerce-contract authority.
 
 ## Architecture boundary
 
