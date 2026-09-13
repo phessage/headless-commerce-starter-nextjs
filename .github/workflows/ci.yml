@@ -7,8 +7,9 @@ on:
 permissions: { contents: read }
 jobs:
   browser:
-    # Use the same maintained runner pool as deployed acceptance; hosted billing is unavailable.
-    runs-on: [self-hosted, linux, x64, docker-services]
+    # Hosted runners: the repository is public and the organisation runner pool
+    # does not serve public repositories. Hosted minutes are free for public repos.
+    runs-on: ubuntu-latest
     # Match @playwright/test; browsers and OS libraries are supplied together.
     container: mcr.microsoft.com/playwright:v1.62.1-noble
     steps:

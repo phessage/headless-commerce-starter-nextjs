@@ -8,7 +8,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   live-order:
-    runs-on: [self-hosted, linux, x64, docker-services]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
