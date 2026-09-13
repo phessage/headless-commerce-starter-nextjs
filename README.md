@@ -1,5 +1,9 @@
 # 1Ecomm Next.js Storefront Starter
 
+<!-- 1ecomm-discovery -->
+> Part of **[1Ecomm headless commerce](https://www.1ecomm.com/headless-commerce)** — catalog, cart, checkout and order APIs for custom storefronts and apps.
+> Fastest start: `npm create @1ecomm/storefront@latest` · [CLI guide](https://www.1ecomm.com/headless-commerce/cli.html) · [OpenAPI contract](https://www.1ecomm.com/headless-commerce/openapi.yaml) · [All starters and SDKs](https://www.1ecomm.com/headless-commerce#starters)
+
 Free for authorized 1Ecomm customers and their developers to build and operate 1Ecomm-connected storefronts. You may deploy the finished store, but may not redistribute, resell, sublicense, mirror, or republish this starter or a reusable derivative. See [LICENSE.md](LICENSE.md).
 
 This Next.js App Router starter uses 1Ecomm's managed commerce backend. The browser renders products, a persistent guest cart, checkout choices and guest order lookup. A supported non-hosted method creates a pending order; an enabled hosted method redirects to the merchant's payment provider. Card entry happens at the provider. Hosted payment remains subject to backend and provider qualification; this source update is not a general-availability declaration.
