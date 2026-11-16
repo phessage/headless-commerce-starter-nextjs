@@ -1,15 +1,16 @@
 name: CI
 on:
+  # Public repository on the organisation's self-hosted runners. Pull requests
+  # (including any from forks) never trigger a run: CI runs only for pushes to
+  # main, release tags and manual dispatch by a maintainer.
   push:
-    branches-ignore: ["integration/**", "wave/**"]
-  pull_request:
-    branches-ignore: ["integration/**"]
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
 permissions: { contents: read }
 jobs:
   browser:
-    # Hosted runners: the repository is public and the organisation runner pool
-    # does not serve public repositories. Hosted minutes are free for public repos.
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, docker-services]
     # Match @playwright/test; browsers and OS libraries are supplied together.
     container: mcr.microsoft.com/playwright:v1.62.1-noble
     steps:
